@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Layout, 
   Calendar as CalIcon, 
@@ -30,12 +30,11 @@ import { LifeAreas } from './components/LifeAreas';
 import { AIAssistant } from './components/AIAssistant';
 import { Reminders } from './components/Reminders';
 import { Notes } from './components/Notes';
-import { Card, ProgressBar } from './components/UIComponents';
+import { Card, ProgressBar, NotificationToast } from './components/UIComponents';
 
 const App: React.FC = () => {
   // --- State ---
   const [activeTab, setActiveTab] = useState(() => {
-    // Persist active tab selection
     if (typeof localStorage !== 'undefined') {
       return localStorage.getItem('ONYX_ACTIVE_TAB') || 'dashboard';
     }
@@ -43,7 +42,12 @@ const App: React.FC = () => {
   });
   const [showAI, setShowAI] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [toasts, setToasts] = useState<{id: string; message: string}[]>([]);
   
+  // Notification Audio Ref
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const lastCheckedMinuteRef = useRef<string>('');
+
   const [appState, setAppState] = useState<AppState>({
     tasks: INITIAL_TASKS,
     areas: INITIAL_AREAS,
@@ -61,9 +65,15 @@ const App: React.FC = () => {
       setAppState(checkDailyReset(loaded));
     }
     
+    // Initialize Audio
+    audioRef.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+    audioRef.current.volume = 0.5;
+
     // Request notification permission on load
     if ("Notification" in window) {
-      Notification.requestPermission();
+      if (Notification.permission !== "granted" && Notification.permission !== "denied") {
+        Notification.requestPermission();
+      }
     }
   }, []);
 
@@ -75,28 +85,68 @@ const App: React.FC = () => {
     localStorage.setItem('ONYX_ACTIVE_TAB', activeTab);
   }, [activeTab]);
 
-  // Check for Reminders every minute
+  // Helper to trigger notifications
+  const triggerNotification = (title: string, body: string) => {
+    // 1. In-App Toast
+    const id = Date.now().toString() + Math.random();
+    setToasts(prev => [...prev, { id, message: `${title}: ${body}` }]);
+
+    // 2. Audio Alert
+    if (audioRef.current) {
+      audioRef.current.play().catch(e => console.log("Audio play blocked", e));
+    }
+
+    // 3. System Notification
+    if ("Notification" in window && Notification.permission === "granted") {
+      try {
+        new Notification(title, { 
+          body,
+          icon: '/vite.svg', // Fallback icon
+          badge: '/vite.svg'
+        });
+      } catch (e) {
+        console.error("Notification failed", e);
+      }
+    }
+  };
+
+  // Check for Reminders and Events
   useEffect(() => {
-    const interval = setInterval(() => {
+    const checkNotifications = () => {
       const now = new Date();
+      const currentMinuteStr = now.toISOString().slice(0, 16); // YYYY-MM-DDTHH:mm
+
+      // Prevent multiple triggers in the same minute
+      if (lastCheckedMinuteRef.current === currentMinuteStr) return;
+      lastCheckedMinuteRef.current = currentMinuteStr;
+
       const currentTime = now.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
       const today = now.toISOString().split('T')[0];
 
+      // Check Reminders
       appState.tasks.forEach(task => {
-        if (task.type === 'reminder' && !task.completed && task.dueTime === currentTime && task.dueDate === today) {
-          // Trigger notification
-          if (Notification.permission === "granted") {
-            new Notification("Onyx Reminder", { body: task.title });
-          } else {
-            // Fallback alert
-            alert(`Reminder: ${task.title}`);
-          }
+        if (task.type === 'reminder' && !task.completed && task.dueDate === today && task.dueTime === currentTime) {
+          triggerNotification("Reminder", task.title);
         }
       });
-    }, 60000); // Check every minute
+
+      // Check Calendar Events
+      appState.events.forEach(event => {
+        if (event.date === today && event.time === currentTime) {
+           triggerNotification("Event Starting", event.title);
+        }
+      });
+    };
+
+    // Check every 5 seconds to catch the minute change accurately
+    const interval = setInterval(checkNotifications, 5000); 
 
     return () => clearInterval(interval);
-  }, [appState.tasks]);
+  }, [appState.tasks, appState.events]);
+
+  const removeToast = (id: string) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  };
 
   // --- Handlers ---
   const toggleTask = (id: string) => {
@@ -244,7 +294,6 @@ const App: React.FC = () => {
       setAppState(prev => ({
           ...prev,
           areas: prev.areas.filter(a => a.id !== id),
-          // Clean up related tasks/objectives if needed, for now just keeping it simple
           tasks: prev.tasks.filter(t => t.areaId !== id),
           objectives: prev.objectives.filter(o => o.areaId !== id)
       }));
@@ -260,30 +309,35 @@ const App: React.FC = () => {
     const handleQuickRemind = (e: React.FormEvent) => {
       e.preventDefault();
       if (!quickRemind.trim()) return;
+      
+      const now = new Date();
+      // If no time set, default to 1 hour from now for quick addition
+      const defaultTime = new Date(now.getTime() + 60*60*1000).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
+
       addTask({
         title: quickRemind,
         type: 'reminder', 
         tags: [],
         priority: 'Medium',
-        dueDate: new Date().toISOString().split('T')[0],
-        dueTime: quickRemindTime || undefined
+        dueDate: now.toISOString().split('T')[0],
+        dueTime: quickRemindTime || defaultTime
       });
       setQuickRemind('');
       setQuickRemindTime('');
+      
+      // Immediate feedback toast
+      const id = Date.now().toString();
+      setToasts(prev => [...prev, { id, message: `Reminder set for ${quickRemindTime || defaultTime}` }]);
     };
 
-    // Filters: Exclude 'reminder' and 'calendar_only' from main lists
-    // Safety check with optional chaining for tags
     const highPriority = appState.tasks.filter(t => t.type === 'short_term' && !t.completed && t.priority === 'High' && !t.tags?.includes('calendar_only'));
     const taskForceTasks = appState.tasks.filter(t => t.type === 'short_term' && !t.completed && !t.tags?.includes('calendar_only'));
     const operations = appState.tasks.filter(t => t.type === 'long_term' && !t.completed);
     
-    // Daily Stats
     const dailyTasks = appState.tasks.filter(t => t.type === 'daily');
     const completedDaily = dailyTasks.filter(t => t.completed).length;
     const dailyProgress = dailyTasks.length > 0 ? (completedDaily / dailyTasks.length) * 100 : 0;
     
-    // Area Stats Calculation for Widget
     const areaStats = appState.areas.map(area => {
         const areaTasks = appState.tasks.filter(t => t.areaId === area.id);
         const areaObjectives = appState.objectives.filter(o => o.areaId === area.id);
@@ -299,16 +353,26 @@ const App: React.FC = () => {
 
     return (
       <div className="space-y-8 max-w-5xl mx-auto pb-20">
-        {/* Welcome & Quick Reminder */}
         <div className="flex flex-col gap-6">
            <div className="flex justify-between items-end">
               <div>
                 <h2 className="text-3xl font-bold text-white tracking-tight">Dashboard</h2>
                 <div className="text-neutral-500">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</div>
               </div>
+              <button 
+                 onClick={() => {
+                   if (Notification.permission !== "granted") {
+                      Notification.requestPermission();
+                   }
+                   // Play dummy sound to unlock audio on mobile
+                   if(audioRef.current) { audioRef.current.play().catch(() => {}); }
+                 }}
+                 className="text-[10px] text-neutral-500 hover:text-white border border-onyx-800 px-2 py-1 rounded"
+              >
+                 Enable Notifications
+              </button>
            </div>
 
-           {/* Quick Reminder Window */}
            <Card className="p-4 bg-onyx-900 border-onyx-800">
               <form onSubmit={handleQuickRemind} className="flex flex-col sm:flex-row gap-3 sm:gap-4 items-stretch sm:items-center">
                  <input 
@@ -377,7 +441,7 @@ const App: React.FC = () => {
           )}
         </section>
 
-        {/* 3. High Priority Tasks - Clean List UI */}
+        {/* 3. High Priority Tasks */}
         <section>
           <div className="flex items-center gap-2 mb-4 text-red-400 font-medium">
              <Zap size={18} /> High Priority
@@ -431,7 +495,7 @@ const App: React.FC = () => {
           <ProgressBar progress={dailyProgress} className="mb-4 h-2" />
         </section>
 
-        {/* 6. Life Areas (with percentages) */}
+        {/* 6. Life Areas */}
         <section>
            <div className="flex items-center justify-between mb-4 cursor-pointer hover:text-white transition-colors" onClick={() => setActiveTab('areas')}>
              <div className="flex items-center gap-2 text-neutral-300 font-medium">
@@ -552,12 +616,16 @@ const App: React.FC = () => {
   );
 
   const reminderCount = appState.tasks.filter(t => t.type === 'reminder' && !t.completed).length;
-  // Safer filtering
   const taskForceCount = appState.tasks.filter(t => t.type === 'short_term' && !t.completed && !t.tags?.includes('calendar_only')).length;
   const operationsCount = appState.tasks.filter(t => t.type === 'long_term' && !t.completed).length;
 
   return (
     <div className="min-h-screen bg-onyx-950 text-neutral-200 font-sans flex overflow-hidden">
+      {/* Notifications Container */}
+      {toasts.map(toast => (
+         <NotificationToast key={toast.id} message={toast.message} onClose={() => removeToast(toast.id)} />
+      ))}
+
       {/* Desktop Sidebar */}
       <aside className="hidden md:flex flex-col w-64 border-r border-onyx-800 bg-onyx-900/30 p-4">
         <div className="mb-8 px-4 py-2">
@@ -625,7 +693,7 @@ const App: React.FC = () => {
           {renderContent()}
         </div>
 
-        {/* AI Overlay (Desktop Slide-over / Mobile Fullscreen) */}
+        {/* AI Overlay */}
         {showAI && (
           <div className="absolute inset-y-0 right-0 w-full md:w-[400px] bg-onyx-950 border-l border-onyx-800 shadow-2xl z-50 transform transition-transform animate-in slide-in-from-right duration-300">
             <AIAssistant appState={appState} onClose={() => setShowAI(false)} isMobile={false} />

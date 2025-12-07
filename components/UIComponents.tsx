@@ -70,3 +70,26 @@ export const ProgressBar: React.FC<{ progress: number; className?: string }> = (
     />
   </div>
 );
+
+// Notification Toast
+export const NotificationToast: React.FC<{ message: string; onClose: () => void }> = ({ message, onClose }) => {
+  React.useEffect(() => {
+    const timer = setTimeout(onClose, 6000); // Auto close after 6 seconds
+    return () => clearTimeout(timer);
+  }, [onClose]);
+
+  return (
+    <div className="fixed top-4 right-4 z-[100] animate-in slide-in-from-top-2 fade-in duration-300 max-w-[90vw] md:max-w-md">
+      <div className="bg-onyx-900/95 backdrop-blur border border-onyx-700 text-white px-4 py-4 rounded-xl shadow-2xl flex items-start gap-4 ring-1 ring-white/10">
+        <div className="w-2 h-2 mt-2 rounded-full bg-blue-500 animate-pulse shrink-0 shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
+        <div className="flex-1">
+          <h4 className="text-xs font-bold text-neutral-400 uppercase tracking-wider mb-0.5">Notification</h4>
+          <span className="text-sm font-medium leading-tight block">{message}</span>
+        </div>
+        <button onClick={onClose} className="text-neutral-500 hover:text-white p-1 rounded hover:bg-white/10 transition-colors">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+    </div>
+  );
+};

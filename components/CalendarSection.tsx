@@ -112,8 +112,8 @@ export const CalendarSection: React.FC<CalendarSectionProps> = ({ events, tasks,
               >
                 <span>{format(day, 'd')}</span>
                 <div className="flex gap-0.5 mt-0.5">
-                  {hasEvent && <span className={`w-0.5 h-0.5 rounded-full ${isSelected ? 'bg-blue-400' : 'bg-blue-600'}`}></span>}
-                  {hasTask && <span className={`w-0.5 h-0.5 rounded-full ${isSelected ? 'bg-green-400' : 'bg-green-600'}`}></span>}
+                  {hasEvent && <span className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-blue-400' : 'bg-blue-600'}`}></span>}
+                  {hasTask && <span className={`w-1 h-1 rounded-full ${isSelected ? 'bg-green-400' : 'bg-green-600'}`}></span>}
                 </div>
               </button>
             );

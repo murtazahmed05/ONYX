@@ -310,23 +310,23 @@ const App: React.FC = () => {
 
            {/* Quick Reminder Window */}
            <Card className="p-4 bg-onyx-900 border-onyx-800">
-              <form onSubmit={handleQuickRemind} className="flex gap-4 items-center">
+              <form onSubmit={handleQuickRemind} className="flex flex-col sm:flex-row gap-3 sm:gap-4 items-stretch sm:items-center">
                  <input 
-                   className="flex-1 bg-transparent border-b border-onyx-700 pb-2 text-white placeholder-neutral-500 focus:outline-none focus:border-white transition-colors"
+                   className="flex-1 bg-transparent border-b border-onyx-700 pb-2 text-white placeholder-neutral-500 focus:outline-none focus:border-white transition-colors w-full"
                    placeholder="Quick reminder: Take medicine at 5pm..."
                    value={quickRemind}
                    onChange={e => setQuickRemind(e.target.value)}
                  />
-                 <div className="flex items-center gap-1 border-b border-onyx-700 pb-2">
-                    <Clock size={16} className="text-neutral-500" />
+                 <div className="flex items-center gap-1 border-b border-onyx-700 pb-2 w-full sm:w-auto">
+                    <Clock size={16} className="text-neutral-500 shrink-0" />
                     <input 
                       type="time"
-                      className="bg-transparent text-sm text-neutral-300 focus:text-white focus:outline-none"
+                      className="bg-transparent text-sm text-neutral-300 focus:text-white focus:outline-none w-full sm:w-auto"
                       value={quickRemindTime}
                       onChange={e => setQuickRemindTime(e.target.value)}
                     />
                  </div>
-                 <button type="submit" className="text-neutral-400 hover:text-white transition-colors">
+                 <button type="submit" className="text-neutral-400 hover:text-white transition-colors self-end sm:self-auto">
                    <Plus size={24} />
                  </button>
               </form>

@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Onyx | Minimal Productivity</title>
     <meta name="description" content="A minimal, jet-black productivity suite for high-performance individuals. Tasks, Operations, and Life Areas in one place." />
+    <!-- Keeping Tailwind via CDN for simplicity in this specific deployment setup -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
@@ -59,17 +60,20 @@
   "imports": {
     "react/": "https://aistudiocdn.com/react@^19.2.1/",
     "react": "https://aistudiocdn.com/react@^19.2.1",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/",
     "lucide-react": "https://aistudiocdn.com/lucide-react@^0.556.0",
-    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.31.0",
     "clsx": "https://aistudiocdn.com/clsx@^2.1.1",
-    "tailwind-merge": "https://aistudiocdn.com/tailwind-merge@^3.4.0",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.31.0",
     "date-fns": "https://aistudiocdn.com/date-fns@^4.1.0",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/"
+    "tailwind-merge": "https://aistudiocdn.com/tailwind-merge@^3.4.0",
+    "vite": "https://aistudiocdn.com/vite@^7.2.6",
+    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.1"
   }
 }
 </script>
 </head>
   <body>
     <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
   </body>
 </html>

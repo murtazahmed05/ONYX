@@ -178,34 +178,34 @@ export const TaskForce: React.FC<TaskForceProps> = ({ tasks, onToggle, onAdd, on
       )}
 
       {/* Active Tasks Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-6 pb-10">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-4 pb-10">
         {activeTasks.map(task => (
-          <div key={task.id} className="group bg-onyx-800 hover:bg-onyx-700/50 border border-onyx-700 rounded-xl p-6 transition-all relative flex flex-col shadow-sm hover:shadow-md">
-            <div className="flex items-start justify-between mb-4">
+          <div key={task.id} className="group bg-onyx-800 hover:bg-onyx-700/50 border border-onyx-700 rounded-xl p-4 transition-all relative flex flex-col shadow-sm hover:shadow-md">
+            <div className="flex items-start justify-between mb-3">
               <Badge color={priorityColor(task.priority)}>{task.priority}</Badge>
-              <div className="flex gap-4 items-center">
+              <div className="flex gap-3 items-center">
                  <button onClick={() => onDelete(task.id)} className="text-neutral-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <X size={18} />
+                    <X size={16} />
                  </button>
                  <button 
                     onClick={() => onToggle(task.id)}
-                    className="w-7 h-7 rounded-full border-2 border-neutral-500 hover:border-white hover:bg-white/10 flex items-center justify-center transition-all"
+                    className="w-6 h-6 rounded-full border-2 border-neutral-500 hover:border-white hover:bg-white/10 flex items-center justify-center transition-all"
                     title="Mark Complete"
                  ></button>
               </div>
             </div>
             
-            <h3 className="text-neutral-100 font-semibold text-xl mb-4 leading-relaxed">{task.title}</h3>
+            <h3 className="text-neutral-100 font-semibold text-lg mb-3 leading-tight">{task.title}</h3>
             
             {task.subtasks && task.subtasks.length > 0 && (
-              <div className="mb-5 space-y-3 pl-1">
+              <div className="mb-3 space-y-2 pl-1">
                 {task.subtasks.map(st => (
-                  <div key={st.id} className="flex items-center gap-3 text-base">
+                  <div key={st.id} className="flex items-center gap-2 text-sm">
                      <div 
                        onClick={(e) => { e.stopPropagation(); onToggleSubtask && onToggleSubtask(task.id, st.id); }}
-                       className={`w-4 h-4 border rounded cursor-pointer flex items-center justify-center transition-colors ${st.completed ? 'bg-neutral-500 border-neutral-500' : 'border-neutral-600 hover:border-neutral-400'}`}
+                       className={`w-3.5 h-3.5 border rounded cursor-pointer flex items-center justify-center transition-colors ${st.completed ? 'bg-neutral-500 border-neutral-500' : 'border-neutral-600 hover:border-neutral-400'}`}
                      >
-                       {st.completed && <Check size={12} className="text-black" />}
+                       {st.completed && <Check size={10} className="text-black" />}
                      </div>
                      <span className={`${st.completed ? 'line-through text-neutral-600' : 'text-neutral-400'}`}>{st.title}</span>
                   </div>
@@ -214,9 +214,9 @@ export const TaskForce: React.FC<TaskForceProps> = ({ tasks, onToggle, onAdd, on
             )}
 
             {task.tags && task.tags.length > 0 && (
-              <div className="mt-auto pt-4 flex gap-2 flex-wrap border-t border-white/5">
+              <div className="mt-auto pt-3 flex gap-2 flex-wrap border-t border-white/5">
                 {task.tags.map(tag => (
-                  <span key={tag} className="text-xs text-neutral-400 bg-onyx-900 px-2 py-1 rounded">#{tag}</span>
+                  <span key={tag} className="text-[10px] text-neutral-400 bg-onyx-900 px-1.5 py-0.5 rounded">#{tag}</span>
                 ))}
               </div>
             )}
@@ -243,16 +243,16 @@ export const TaskForce: React.FC<TaskForceProps> = ({ tasks, onToggle, onAdd, on
           {showCompleted && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-4 opacity-60">
                {completedTasks.map(task => (
-                 <div key={task.id} className="bg-onyx-900/50 border border-onyx-800 rounded-lg p-4 flex items-center gap-4">
+                 <div key={task.id} className="bg-onyx-900/50 border border-onyx-800 rounded-lg p-3 flex items-center gap-4">
                     <button 
                       onClick={() => onToggle(task.id)}
-                      className="w-6 h-6 rounded-full bg-green-900/40 border border-green-700 flex items-center justify-center text-green-500"
+                      className="w-5 h-5 rounded-full bg-green-900/40 border border-green-700 flex items-center justify-center text-green-500"
                     >
-                      <Check size={14} />
+                      <Check size={12} />
                     </button>
-                    <span className="text-neutral-500 line-through flex-1">{task.title}</span>
+                    <span className="text-neutral-500 line-through flex-1 text-sm">{task.title}</span>
                     <button onClick={() => onDelete(task.id)} className="text-neutral-700 hover:text-red-400">
-                      <Trash2 size={16} />
+                      <Trash2 size={14} />
                     </button>
                  </div>
                ))}

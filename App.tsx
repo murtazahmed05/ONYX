@@ -69,11 +69,11 @@ const App: React.FC = () => {
     audioRef.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
     audioRef.current.volume = 0.5;
 
-    // Request notification permission on load
+    // Request notification permission on load quietly
     if ("Notification" in window) {
-      if (Notification.permission !== "granted" && Notification.permission !== "denied") {
-        Notification.requestPermission();
-      }
+      // We don't force it here to avoid annoying user immediately, 
+      // but if they already granted, we are good.
+      // The button in Dashboard handles explicit request.
     }
   }, []);
 
@@ -85,29 +85,51 @@ const App: React.FC = () => {
     localStorage.setItem('ONYX_ACTIVE_TAB', activeTab);
   }, [activeTab]);
 
-  // Helper to trigger notifications
-  const triggerNotification = (title: string, body: string) => {
-    // 1. In-App Toast
-    const id = Date.now().toString() + Math.random();
-    setToasts(prev => [...prev, { id, message: `${title}: ${body}` }]);
+  // --- Notification Logic ---
 
-    // 2. Audio Alert
+  // 1. Show In-App Toast (For Created Feedback ONLY)
+  const showToast = (message: string) => {
+    const id = Date.now().toString() + Math.random();
+    setToasts(prev => [...prev, { id, message }]);
+  };
+
+  // 2. Trigger Due Alert (System Notification + Audio) - NO In-App Toast
+  const triggerDueAlert = async (title: string, body: string) => {
+    // Audio
     if (audioRef.current) {
       audioRef.current.play().catch(e => console.log("Audio play blocked", e));
     }
 
-    // 3. System Notification
-    if ("Notification" in window && Notification.permission === "granted") {
-      try {
-        new Notification(title, { 
-          body,
-          icon: '/vite.svg', // Fallback icon
-          badge: '/vite.svg'
-        });
-      } catch (e) {
-        console.error("Notification failed", e);
-      }
+    // Service Worker Notification (Preferred for Android/PWA)
+    if ("serviceWorker" in navigator && "Notification" in window) {
+        if (Notification.permission === "granted") {
+            try {
+                const reg = await navigator.serviceWorker.ready;
+                // Fix: Cast options to any to allow 'vibrate' property which might be missing in NotificationOptions type definition
+                reg.showNotification(title, {
+                    body,
+                    icon: '/vite.svg', // Ensure favicon exists or use a generic one
+                    badge: '/vite.svg',
+                    vibrate: [200, 100, 200],
+                    tag: 'onyx-notification'
+                } as any);
+                return; // Success, stop here
+            } catch (e) {
+                console.error("SW Notification failed, falling back", e);
+            }
+        }
     }
+
+    // Standard Notification Fallback (Desktop)
+    if ("Notification" in window && Notification.permission === "granted") {
+        new Notification(title, { 
+            body, 
+            icon: '/vite.svg' 
+        });
+    }
+    
+    // NOTE: Removed showToast fallback here as per user request
+    // Alerts will only appear in system tray or play sound.
   };
 
   // Check for Reminders and Events
@@ -126,14 +148,14 @@ const App: React.FC = () => {
       // Check Reminders
       appState.tasks.forEach(task => {
         if (task.type === 'reminder' && !task.completed && task.dueDate === today && task.dueTime === currentTime) {
-          triggerNotification("Reminder", task.title);
+          triggerDueAlert("Reminder Due", task.title);
         }
       });
 
       // Check Calendar Events
       appState.events.forEach(event => {
         if (event.date === today && event.time === currentTime) {
-           triggerNotification("Event Starting", event.title);
+           triggerDueAlert("Event Starting", event.title);
         }
       });
     };
@@ -325,9 +347,8 @@ const App: React.FC = () => {
       setQuickRemind('');
       setQuickRemindTime('');
       
-      // Immediate feedback toast
-      const id = Date.now().toString();
-      setToasts(prev => [...prev, { id, message: `Reminder set for ${quickRemindTime || defaultTime}` }]);
+      // Immediate feedback toast (for CREATION only)
+      showToast(`Reminder set for ${quickRemindTime || defaultTime}`);
     };
 
     const highPriority = appState.tasks.filter(t => t.type === 'short_term' && !t.completed && t.priority === 'High' && !t.tags?.includes('calendar_only'));
@@ -362,7 +383,11 @@ const App: React.FC = () => {
               <button 
                  onClick={() => {
                    if (Notification.permission !== "granted") {
-                      Notification.requestPermission();
+                      Notification.requestPermission().then(permission => {
+                        if (permission === "granted") {
+                           showToast("Notifications Enabled!");
+                        }
+                      });
                    }
                    // Play dummy sound to unlock audio on mobile
                    if(audioRef.current) { audioRef.current.play().catch(() => {}); }

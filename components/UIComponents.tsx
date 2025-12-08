@@ -74,7 +74,8 @@ export const ProgressBar: React.FC<{ progress: number; className?: string }> = (
 // Notification Toast
 export const NotificationToast: React.FC<{ message: string; onClose: () => void }> = ({ message, onClose }) => {
   React.useEffect(() => {
-    const timer = setTimeout(onClose, 6000); // Auto close after 6 seconds
+    // Auto close after 3 seconds (3000ms) as requested
+    const timer = setTimeout(onClose, 3000); 
     return () => clearTimeout(timer);
   }, [onClose]);
 

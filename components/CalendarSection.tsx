@@ -2,20 +2,33 @@ import React, { useState } from 'react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday, addMonths, subMonths } from 'date-fns';
 import { CalendarEvent, Task } from '../types';
 import { Card } from './UIComponents';
-import { Calendar as CalendarIcon, Clock, Plus, X, ChevronLeft, ChevronRight, Check } from 'lucide-react';
+import { Calendar as CalendarIcon, Clock, Plus, X, ChevronLeft, ChevronRight, Check, Trash2, Edit2 } from 'lucide-react';
 
 interface CalendarSectionProps {
   events: CalendarEvent[];
   tasks: Task[]; // Pass all tasks to filter for calendar specific ones
   onAddEvent?: (event: Partial<CalendarEvent>) => void;
   onAddTask?: (task: Partial<Task>) => void;
+  onUpdateEvent?: (id: string, updates: Partial<CalendarEvent>) => void;
+  onDeleteEvent?: (id: string) => void;
+  onUpdateTask?: (id: string, updates: Partial<Task>) => void;
+  onDeleteTask?: (id: string) => void;
 }
 
-export const CalendarSection: React.FC<CalendarSectionProps> = ({ events, tasks, onAddEvent, onAddTask }) => {
+export const CalendarSection: React.FC<CalendarSectionProps> = ({ 
+  events, tasks, 
+  onAddEvent, onAddTask, 
+  onUpdateEvent, onDeleteEvent, 
+  onUpdateTask, onDeleteTask 
+}) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [addType, setAddType] = useState<'event' | 'task'>('event');
+  
+  // Modal State
+  const [modalMode, setModalMode] = useState<'add' | 'edit'>('add');
+  const [itemType, setItemType] = useState<'event' | 'task'>('event');
+  const [editItemId, setEditItemId] = useState<string | null>(null);
   const [title, setTitle] = useState('');
   const [time, setTime] = useState('');
 
@@ -35,15 +48,31 @@ export const CalendarSection: React.FC<CalendarSectionProps> = ({ events, tasks,
   const handleDateClick = (day: Date) => {
     setSelectedDate(day);
     // Do not open modal immediately.
-    setAddType('event');
+    setModalMode('add');
+    setItemType('event');
     setTitle('');
     setTime('');
+    setEditItemId(null);
   };
 
   const openAddModal = () => {
     if (selectedDate) {
+      setModalMode('add');
+      setItemType('event'); // Default
+      setTitle('');
+      setTime('');
+      setEditItemId(null);
       setIsModalOpen(true);
     }
+  };
+
+  const openEditModal = (id: string, type: 'event' | 'task', currentTitle: string, currentTime?: string) => {
+    setModalMode('edit');
+    setItemType(type);
+    setEditItemId(id);
+    setTitle(currentTitle);
+    setTime(currentTime || '');
+    setIsModalOpen(true);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -52,20 +81,28 @@ export const CalendarSection: React.FC<CalendarSectionProps> = ({ events, tasks,
 
     const dateStr = format(selectedDate, 'yyyy-MM-dd');
 
-    if (addType === 'event' && onAddEvent) {
-      onAddEvent({
-        title,
-        date: dateStr,
-        time: time || undefined
-      });
-    } else if (addType === 'task' && onAddTask) {
-      onAddTask({
-        title,
-        type: 'short_term',
-        dueDate: dateStr,
-        priority: 'Medium',
-        tags: ['calendar_only'] // Tagging as requested so it stays here
-      });
+    if (modalMode === 'add') {
+      if (itemType === 'event' && onAddEvent) {
+        onAddEvent({
+          title,
+          date: dateStr,
+          time: time || undefined
+        });
+      } else if (itemType === 'task' && onAddTask) {
+        onAddTask({
+          title,
+          type: 'short_term',
+          dueDate: dateStr,
+          priority: 'Medium',
+          tags: ['calendar_only'] // Tagging as requested so it stays here
+        });
+      }
+    } else if (modalMode === 'edit' && editItemId) {
+      if (itemType === 'event' && onUpdateEvent) {
+        onUpdateEvent(editItemId, { title, time: time || undefined });
+      } else if (itemType === 'task' && onUpdateTask) {
+        onUpdateTask(editItemId, { title }); // Tasks here don't have time usually in this simplified view, but kept consistent
+      }
     }
 
     setIsModalOpen(false);
@@ -138,27 +175,39 @@ export const CalendarSection: React.FC<CalendarSectionProps> = ({ events, tasks,
            
            <div className="space-y-2">
              {events.filter(e => e.date === format(selectedDate, 'yyyy-MM-dd')).map(e => (
-               <div key={e.id} className="p-3 bg-onyx-900 border border-onyx-800 rounded-lg flex gap-3 items-center">
+               <div key={e.id} className="p-3 bg-onyx-900 border border-onyx-800 rounded-lg flex gap-3 items-center group">
                   <div className="w-1 h-8 bg-blue-500 rounded-full"></div>
-                  <div>
+                  <div className="flex-1">
                      <div className="text-sm text-white font-medium">{e.title}</div>
                      {e.time && <div className="text-xs text-neutral-500 flex items-center gap-1"><Clock size={10}/> {e.time}</div>}
+                  </div>
+                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button onClick={() => openEditModal(e.id, 'event', e.title, e.time)} className="text-neutral-500 hover:text-white p-1"><Edit2 size={12}/></button>
+                      <button onClick={() => onDeleteEvent && onDeleteEvent(e.id)} className="text-neutral-500 hover:text-red-400 p-1"><Trash2 size={12}/></button>
                   </div>
                </div>
              ))}
              {calendarTasks.filter(t => t.dueDate === format(selectedDate, 'yyyy-MM-dd')).map(t => (
-               <div key={t.id} className="p-3 bg-onyx-900 border border-onyx-800 rounded-lg flex gap-3 items-center">
+               <div key={t.id} className="p-3 bg-onyx-900 border border-onyx-800 rounded-lg flex gap-3 items-center group">
                   <div className="w-1 h-8 bg-green-500 rounded-full"></div>
                   <div className="flex-1">
                      <div className="text-sm text-white">{t.title}</div>
                      <span className="text-[10px] text-neutral-500 uppercase tracking-wider">Task</span>
                   </div>
+                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button onClick={() => openEditModal(t.id, 'task', t.title)} className="text-neutral-500 hover:text-white p-1"><Edit2 size={12}/></button>
+                      <button onClick={() => onDeleteTask && onDeleteTask(t.id)} className="text-neutral-500 hover:text-red-400 p-1"><Trash2 size={12}/></button>
+                  </div>
                </div>
              ))}
              {remindersOnDate.filter(t => t.dueDate === format(selectedDate, 'yyyy-MM-dd')).map(t => (
-               <div key={t.id} className="p-3 bg-onyx-900 border border-onyx-800 rounded-lg flex gap-3 items-center">
+               <div key={t.id} className="p-3 bg-onyx-900 border border-onyx-800 rounded-lg flex gap-3 items-center group">
                   <div className="w-1 h-8 bg-yellow-500 rounded-full"></div>
-                  <div className="text-sm text-white">{t.title} <span className="text-xs text-neutral-500">(Reminder)</span></div>
+                  <div className="flex-1">
+                    <div className="text-sm text-white">{t.title}</div>
+                    <span className="text-xs text-neutral-500">(Reminder)</span>
+                  </div>
+                  <button onClick={() => onDeleteTask && onDeleteTask(t.id)} className="opacity-0 group-hover:opacity-100 text-neutral-500 hover:text-red-400 p-1"><Trash2 size={12}/></button>
                </div>
              ))}
 
@@ -174,7 +223,7 @@ export const CalendarSection: React.FC<CalendarSectionProps> = ({ events, tasks,
         </div>
       )}
 
-      {/* Add Event Modal */}
+      {/* Add/Edit Event Modal */}
       {isModalOpen && selectedDate && (
         <div className="absolute inset-0 z-50 flex items-center justify-center p-4">
            <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setIsModalOpen(false)}></div>
@@ -184,24 +233,26 @@ export const CalendarSection: React.FC<CalendarSectionProps> = ({ events, tasks,
               </button>
               
               <h3 className="text-lg font-semibold text-white mb-1">
-                {format(selectedDate, 'MMMM d, yyyy')}
+                {modalMode === 'add' ? 'Add Item' : 'Edit Item'}
               </h3>
-              <p className="text-sm text-neutral-500 mb-4">Add to calendar</p>
+              <p className="text-sm text-neutral-500 mb-4">{format(selectedDate, 'MMMM d, yyyy')}</p>
 
-              <div className="flex bg-onyx-800 rounded-lg p-1 mb-4">
-                 <button 
-                   onClick={() => setAddType('event')}
-                   className={`flex-1 py-1 text-sm rounded-md transition-all ${addType === 'event' ? 'bg-white text-black shadow-sm' : 'text-neutral-400 hover:text-white'}`}
-                 >
-                   Event
-                 </button>
-                 <button 
-                   onClick={() => setAddType('task')}
-                   className={`flex-1 py-1 text-sm rounded-md transition-all ${addType === 'task' ? 'bg-white text-black shadow-sm' : 'text-neutral-400 hover:text-white'}`}
-                 >
-                   Task
-                 </button>
-              </div>
+              {modalMode === 'add' && (
+                <div className="flex bg-onyx-800 rounded-lg p-1 mb-4">
+                  <button 
+                    onClick={() => setItemType('event')}
+                    className={`flex-1 py-1 text-sm rounded-md transition-all ${itemType === 'event' ? 'bg-white text-black shadow-sm' : 'text-neutral-400 hover:text-white'}`}
+                  >
+                    Event
+                  </button>
+                  <button 
+                    onClick={() => setItemType('task')}
+                    className={`flex-1 py-1 text-sm rounded-md transition-all ${itemType === 'task' ? 'bg-white text-black shadow-sm' : 'text-neutral-400 hover:text-white'}`}
+                  >
+                    Task
+                  </button>
+                </div>
+              )}
 
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
@@ -211,11 +262,11 @@ export const CalendarSection: React.FC<CalendarSectionProps> = ({ events, tasks,
                       className="w-full bg-onyx-800 border border-onyx-700 rounded p-2 text-white focus:outline-none focus:border-neutral-500"
                       value={title}
                       onChange={(e) => setTitle(e.target.value)}
-                      placeholder={addType === 'event' ? "Meeting..." : "Deadline..."}
+                      placeholder={itemType === 'event' ? "Meeting..." : "Deadline..."}
                    />
                 </div>
                 
-                {addType === 'event' && (
+                {itemType === 'event' && (
                   <div>
                     <label className="block text-xs text-neutral-500 mb-1">Time (Optional)</label>
                     <input 
@@ -228,11 +279,13 @@ export const CalendarSection: React.FC<CalendarSectionProps> = ({ events, tasks,
                 )}
 
                 <button type="submit" className="w-full bg-white text-black font-medium py-2 rounded-lg hover:bg-neutral-200 transition-colors">
-                  Add {addType === 'event' ? 'Event' : 'Task'}
+                  {modalMode === 'add' ? `Add ${itemType === 'event' ? 'Event' : 'Task'}` : 'Save Changes'}
                 </button>
-                <p className="text-[10px] text-neutral-600 text-center">
-                  {addType === 'task' ? "Tasks added here will only appear in the calendar view." : "Events appear in dashboard and calendar."}
-                </p>
+                {modalMode === 'add' && itemType === 'task' && (
+                  <p className="text-[10px] text-neutral-600 text-center">
+                    Tasks added here will only appear in the calendar view.
+                  </p>
+                )}
               </form>
            </Card>
         </div>

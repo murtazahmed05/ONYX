@@ -69,12 +69,18 @@ const App: React.FC = () => {
     audioRef.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
     audioRef.current.volume = 0.5;
 
-    // Request notification permission on load quietly
-    if ("Notification" in window) {
-      // We don't force it here to avoid annoying user immediately, 
-      // but if they already granted, we are good.
-      // The button in Dashboard handles explicit request.
-    }
+    // Exit Confirmation
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = ''; // Required for Chrome
+      return 'You are leaving this app. Changes may not be saved.';
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
   }, []);
 
   useEffect(() => {
@@ -229,6 +235,17 @@ const App: React.FC = () => {
        ...event
     };
     setAppState(prev => ({ ...prev, events: [...prev.events, newEvent] }));
+  };
+
+  const updateEvent = (id: string, updates: Partial<CalendarEvent>) => {
+    setAppState(prev => ({
+      ...prev,
+      events: prev.events.map(e => e.id === id ? { ...e, ...updates } : e)
+    }));
+  };
+
+  const deleteEvent = (id: string) => {
+    setAppState(prev => ({ ...prev, events: prev.events.filter(e => e.id !== id) }));
   };
 
   const addObjective = (objective: Partial<Objective>) => {
@@ -512,7 +529,16 @@ const App: React.FC = () => {
              <ArrowRight size={16} className="text-neutral-600" />
           </div>
           <div className="bg-onyx-900 rounded-xl border border-onyx-800">
-             <CalendarSection events={appState.events} tasks={appState.tasks} onAddEvent={addEvent} onAddTask={addTask} />
+             <CalendarSection 
+               events={appState.events} 
+               tasks={appState.tasks} 
+               onAddEvent={addEvent} 
+               onAddTask={addTask}
+               onUpdateEvent={updateEvent}
+               onDeleteEvent={deleteEvent}
+               onUpdateTask={updateTask}
+               onDeleteTask={deleteTask}
+             />
           </div>
         </section>
 
@@ -561,6 +587,7 @@ const App: React.FC = () => {
             onAdd={addTask} 
             onDelete={deleteTask}
             onToggleSubtask={toggleSubtask}
+            onUpdate={updateTask}
           />
         );
       case 'operations':
@@ -577,7 +604,16 @@ const App: React.FC = () => {
       case 'calendar':
         return (
            <div className="h-full max-w-4xl mx-auto">
-             <CalendarSection events={appState.events} tasks={appState.tasks} onAddEvent={addEvent} onAddTask={addTask} />
+             <CalendarSection 
+                events={appState.events} 
+                tasks={appState.tasks} 
+                onAddEvent={addEvent} 
+                onAddTask={addTask}
+                onUpdateEvent={updateEvent}
+                onDeleteEvent={deleteEvent}
+                onUpdateTask={updateTask}
+                onDeleteTask={deleteTask}
+             />
            </div>
         );
       case 'reminders':
@@ -661,7 +697,7 @@ const App: React.FC = () => {
       {/* Desktop Sidebar */}
       <aside className="hidden md:flex flex-col w-64 border-r border-onyx-800 bg-onyx-900/30 p-4">
         <div className="mb-8 px-4 py-2">
-          <h1 className="text-2xl font-bold tracking-tighter text-white">ONYX.</h1>
+          <h1 onClick={() => setActiveTab('dashboard')} className="text-2xl font-bold tracking-tighter text-white cursor-pointer hover:text-neutral-300 transition-colors">ONYX.</h1>
         </div>
         
         <nav className="flex-1 space-y-1">
@@ -694,7 +730,7 @@ const App: React.FC = () => {
       <main className="flex-1 flex flex-col relative overflow-hidden h-screen">
         {/* Mobile Header */}
         <header className="md:hidden flex items-center justify-between p-4 border-b border-onyx-800 bg-onyx-950 z-20">
-          <h1 className="text-xl font-bold text-white">ONYX.</h1>
+          <h1 onClick={() => setActiveTab('dashboard')} className="text-xl font-bold text-white cursor-pointer">ONYX.</h1>
           <div className="flex gap-2">
             <button onClick={() => setShowAI(!showAI)} className="p-2 text-white">
               <MessageSquare size={24} />

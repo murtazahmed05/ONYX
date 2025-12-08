@@ -373,56 +373,45 @@ const App: React.FC = () => {
     });
 
     return (
-      <div className="space-y-8 max-w-5xl mx-auto pb-20">
+      <div className="space-y-8 max-w-5xl mx-auto pb-6">
         <div className="flex flex-col gap-6">
            <div className="flex justify-between items-end">
               <div>
                 <h2 className="text-3xl font-bold text-white tracking-tight">Dashboard</h2>
                 <div className="text-neutral-500">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</div>
               </div>
-              <button 
-                 onClick={() => {
-                   if (Notification.permission !== "granted") {
-                      Notification.requestPermission().then(permission => {
-                        if (permission === "granted") {
-                           showToast("Notifications Enabled!");
-                        }
-                      });
-                   }
-                   // Play dummy sound to unlock audio on mobile
-                   if(audioRef.current) { audioRef.current.play().catch(() => {}); }
-                 }}
-                 className="text-[10px] text-neutral-500 hover:text-white border border-onyx-800 px-2 py-1 rounded"
-              >
-                 Enable Notifications
-              </button>
            </div>
 
            <Card className="p-4 bg-onyx-900 border-onyx-800">
-              <form onSubmit={handleQuickRemind} className="flex flex-col sm:flex-row gap-3 sm:gap-4 items-stretch sm:items-center">
+              <form onSubmit={handleQuickRemind} className="flex flex-col sm:flex-row gap-3 sm:gap-4 sm:items-center">
+                 {/* Input Row on Mobile */}
                  <input 
                    className="flex-1 bg-transparent border-b border-onyx-700 pb-2 text-white placeholder-neutral-500 focus:outline-none focus:border-white transition-colors w-full"
                    placeholder="Quick reminder: Take medicine at 5pm..."
                    value={quickRemind}
                    onChange={e => setQuickRemind(e.target.value)}
                  />
-                 <div className="flex items-center gap-1 border-b border-onyx-700 pb-2 w-full sm:w-auto">
-                    <Clock size={16} className="text-neutral-500 shrink-0" />
-                    <input 
-                      type="time"
-                      className="bg-transparent text-sm text-neutral-300 focus:text-white focus:outline-none w-full sm:w-auto"
-                      value={quickRemindTime}
-                      onChange={e => setQuickRemindTime(e.target.value)}
-                    />
+                 
+                 {/* Time + Button Row on Mobile */}
+                 <div className="flex items-center justify-between gap-3 w-full sm:w-auto">
+                    <div className="flex items-center gap-1 border-b border-onyx-700 pb-2 flex-1 sm:w-auto sm:flex-none">
+                        <Clock size={16} className="text-neutral-500 shrink-0" />
+                        <input 
+                          type="time"
+                          className="bg-transparent text-sm text-neutral-300 focus:text-white focus:outline-none w-full sm:w-auto"
+                          value={quickRemindTime}
+                          onChange={e => setQuickRemindTime(e.target.value)}
+                        />
+                    </div>
+                    <button type="submit" className="text-neutral-400 hover:text-white transition-colors shrink-0">
+                       <Plus size={24} />
+                    </button>
                  </div>
-                 <button type="submit" className="text-neutral-400 hover:text-white transition-colors self-end sm:self-auto">
-                   <Plus size={24} />
-                 </button>
               </form>
            </Card>
         </div>
 
-        {/* 1. Task Force Summary */}
+        {/* 1. Task Force Summary - Uniform List Layout */}
         <section>
           <div className="flex items-center justify-between mb-4 cursor-pointer hover:text-white transition-colors" onClick={() => setActiveTab('taskforce')}>
              <div className="flex items-center gap-2 text-neutral-300 font-medium">
@@ -430,14 +419,32 @@ const App: React.FC = () => {
              </div>
              <ArrowRight size={16} className="text-neutral-600" />
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="flex flex-col gap-3">
              {taskForceTasks.slice(0, 4).map(task => (
-               <div key={task.id} className="bg-onyx-900 border border-onyx-800 p-3 rounded-lg flex items-center justify-between">
-                  <span className="text-neutral-300 text-sm truncate">{task.title}</span>
-                  <div className={`w-2 h-2 rounded-full ${task.priority === 'High' ? 'bg-red-500' : task.priority === 'Medium' ? 'bg-yellow-500' : 'bg-green-500'}`}></div>
+               <div key={task.id} className="group flex items-center justify-between p-4 rounded-xl bg-onyx-900 border border-onyx-800 hover:border-white/20 transition-all shadow-sm">
+                  <div className="flex items-center gap-4 overflow-hidden">
+                     <Activity size={16} className="text-neutral-600 shrink-0" />
+                     <span className="text-white font-medium text-base truncate">{task.title}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                     {task.priority && (
+                        <div className={`w-2 h-2 rounded-full ${task.priority === 'High' ? 'bg-red-500' : task.priority === 'Medium' ? 'bg-yellow-500' : 'bg-green-500'}`}></div>
+                     )}
+                     <button 
+                         onClick={() => toggleTask(task.id)}
+                         className="w-7 h-7 rounded-full border-2 border-onyx-700 hover:border-white hover:bg-white text-black flex items-center justify-center transition-all shrink-0 ml-2"
+                         title="Mark Complete"
+                     >
+                         <Check size={14} className="opacity-0 group-hover:opacity-100 transition-opacity" />
+                     </button>
+                  </div>
                </div>
              ))}
-             {taskForceTasks.length === 0 && <div className="text-neutral-600 text-sm italic">Task force standing by.</div>}
+             {taskForceTasks.length === 0 && (
+                <div className="p-6 text-center border border-dashed border-onyx-800 rounded-xl text-neutral-600 text-sm">
+                   Task force standing by.
+                </div>
+             )}
           </div>
         </section>
 

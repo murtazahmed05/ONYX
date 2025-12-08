@@ -75,21 +75,29 @@ export const TaskForce: React.FC<TaskForceProps> = ({ tasks, onToggle, onAdd, on
     }
   };
 
+  const manualAddTag = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (tagInput.trim() && !tags.includes(tagInput.trim())) {
+      setTags([...tags, tagInput.trim()]);
+      setTagInput('');
+    }
+  };
+
   const removeTag = (tagToRemove: string) => {
     setTags(tags.filter(t => t !== tagToRemove));
   };
 
-  const priorityStyles = (p?: Priority) => {
+  const priorityColor = (p?: Priority) => {
     switch(p) {
-      case 'High': return 'text-red-300 bg-red-900/30 border-red-900/50';
-      case 'Medium': return 'text-yellow-300 bg-yellow-900/30 border-yellow-900/50';
-      case 'Low': return 'text-green-300 bg-green-900/30 border-green-900/50';
-      default: return 'text-neutral-400 bg-onyx-800 border-onyx-700';
+      case 'High': return 'text-red-300 border-red-900/50';
+      case 'Medium': return 'text-yellow-300 border-yellow-900/50';
+      case 'Low': return 'text-green-300 border-green-900/50';
+      default: return 'text-neutral-400';
     }
   };
 
   return (
-    <div className="h-full flex flex-col max-w-6xl mx-auto">
+    <div className="h-full flex flex-col max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-8">
         <h2 className="text-2xl font-bold text-white flex items-center gap-3">
           <Activity size={24} className="text-neutral-400" />
@@ -144,6 +152,14 @@ export const TaskForce: React.FC<TaskForceProps> = ({ tasks, onToggle, onAdd, on
                 onChange={(e) => setTagInput(e.target.value)}
                 onKeyDown={addTag}
               />
+              <button 
+                type="button" 
+                onClick={manualAddTag} 
+                className="text-neutral-500 hover:text-white p-1 rounded hover:bg-onyx-700 transition-colors"
+                title="Add Tag"
+              >
+                <Plus size={16}/>
+              </button>
             </div>
 
             {/* Subtasks Input */}
@@ -179,74 +195,67 @@ export const TaskForce: React.FC<TaskForceProps> = ({ tasks, onToggle, onAdd, on
         </Card>
       )}
 
-      {/* Active Tasks - Grid Layout matching Image */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pb-10">
+      {/* Active Tasks - Uniform List Style */}
+      <div className="flex flex-col gap-2 pb-10">
         {activeTasks.map(task => (
-          <div key={task.id} className="group relative bg-[#0A0A0A] border border-onyx-800 rounded-2xl p-5 hover:border-onyx-600 transition-all flex flex-col min-h-[140px]">
+          <div key={task.id} className="relative pl-6 border-l border-onyx-700 py-2 hover:border-white transition-colors group">
+            {/* Completion Toggle */}
+            <div 
+              className="absolute -left-[5px] top-3 w-2.5 h-2.5 bg-black border border-onyx-500 rounded-full group-hover:border-white group-hover:bg-white transition-all cursor-pointer" 
+              onClick={() => onToggle(task.id)}
+            ></div>
             
-            {/* Header: Priority & Actions */}
-            <div className="flex justify-between items-start mb-3">
-              {/* Priority Badge */}
-              {task.priority ? (
-                 <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded border ${priorityStyles(task.priority)}`}>
-                   {task.priority}
-                 </span>
-              ) : <div className="h-6"></div> /* Spacer if no priority */}
-
-              {/* Actions: Delete & Toggle */}
-              <div className="flex items-center gap-3">
-                 <button 
-                   onClick={() => onDelete(task.id)}
-                   className="text-neutral-600 hover:text-white transition-colors opacity-0 group-hover:opacity-100"
-                 >
-                   <X size={16} />
-                 </button>
-                 <div 
-                   onClick={() => onToggle(task.id)}
-                   className="w-5 h-5 rounded-full border border-neutral-500 cursor-pointer hover:bg-white hover:border-white transition-colors"
-                 ></div>
+            <div className="flex flex-col gap-1">
+              <div className="flex justify-between items-start">
+                  <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                          <h3 className="text-neutral-200 font-medium text-sm leading-tight">{task.title}</h3>
+                      </div>
+                      <div className="flex gap-3 mt-1 text-xs text-neutral-500 items-center min-h-[16px]">
+                          {task.priority && (
+                              <span className={`uppercase tracking-wider text-[9px] border px-1 rounded ${priorityColor(task.priority)}`}>
+                                {task.priority}
+                              </span>
+                          )}
+                          {task.tags && task.tags.length > 0 && (
+                            <div className="flex gap-1">
+                                {task.tags.map(tag => (
+                                <span key={tag} className="text-[9px] text-neutral-400 bg-onyx-900 px-1 py-0.5 rounded">#{tag}</span>
+                                ))}
+                            </div>
+                          )}
+                      </div>
+                  </div>
+                  
+                  <button onClick={() => onDelete(task.id)} className="text-neutral-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity p-1">
+                      <Trash2 size={14} />
+                  </button>
               </div>
-            </div>
 
-            {/* Content: Title & Subtasks */}
-            <div className="flex-1 mb-2">
-               <h3 className="text-white font-bold text-lg mb-2 leading-tight">{task.title}</h3>
-               
-               {/* Subtasks */}
-               {task.subtasks && task.subtasks.length > 0 && (
-                 <div className="space-y-1.5 mt-2">
-                   {task.subtasks.map(st => (
-                     <div key={st.id} className="flex items-start gap-2">
-                       <div 
+              {/* Render Subtasks */}
+              {task.subtasks && task.subtasks.length > 0 && (
+                  <div className="pl-1 mt-1 space-y-1">
+                  {task.subtasks.map(st => (
+                      <div key={st.id} className="flex items-center gap-2">
+                          <div 
                           onClick={(e) => { e.stopPropagation(); onToggleSubtask && onToggleSubtask(task.id, st.id); }}
-                          className={`mt-0.5 w-4 h-4 border rounded-[4px] cursor-pointer flex items-center justify-center transition-colors shrink-0 ${st.completed ? 'bg-neutral-800 border-neutral-700' : 'border-neutral-600 hover:border-neutral-400'}`}
-                       >
-                          {st.completed && <Check size={10} className="text-neutral-400" />}
-                       </div>
-                       <span className={`text-sm leading-tight ${st.completed ? 'text-neutral-600 line-through' : 'text-neutral-400'}`}>{st.title}</span>
-                     </div>
-                   ))}
-                 </div>
-               )}
+                          className={`w-3 h-3 border rounded-[2px] cursor-pointer flex items-center justify-center transition-colors ${st.completed ? 'bg-neutral-600 border-neutral-600' : 'border-neutral-600 hover:border-neutral-400'}`}
+                          >
+                              {st.completed && <Check size={8} className="text-black" />}
+                          </div>
+                          <span className={`text-xs ${st.completed ? 'text-neutral-600 line-through' : 'text-neutral-400'}`}>{st.title}</span>
+                      </div>
+                  ))}
+                  </div>
+              )}
             </div>
-
-            {/* Footer: Tags */}
-            {task.tags && task.tags.length > 0 && (
-              <div className="flex flex-wrap gap-2 mt-auto pt-3">
-                 {task.tags.map(tag => (
-                   <span key={tag} className="text-[10px] font-medium bg-onyx-800 text-neutral-400 px-2 py-1 rounded">
-                     #{tag}
-                   </span>
-                 ))}
-              </div>
-            )}
           </div>
         ))}
-        {activeTasks.length === 0 && !showForm && (
-            <div className="col-span-full py-12 text-center text-neutral-600 border border-dashed border-onyx-800 rounded-xl">
+         {activeTasks.length === 0 && !showForm && (
+            <div className="py-12 text-center text-neutral-600 border border-dashed border-onyx-800 rounded-xl">
               All clear. No immediate tasks.
             </div>
-        )}
+          )}
       </div>
 
       {/* Completed Tasks Section */}

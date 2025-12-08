@@ -15,13 +15,18 @@ import {
   Bell,
   Notebook,
   Clock,
-  Check
+  Check,
+  LogOut,
+  Loader2
 } from 'lucide-react';
-import { loadState, saveState, checkDailyReset } from './services/storageService';
+import { auth } from './services/firebase';
+import { onAuthStateChanged, signOut, User } from 'firebase/auth';
+import { loadState, saveState, checkDailyReset, subscribeToData } from './services/storageService';
 import { INITIAL_TASKS, INITIAL_AREAS, INITIAL_EVENTS, INITIAL_MILESTONES, INITIAL_OBJECTIVES, INITIAL_NOTES } from './constants';
 import { AppState, Task, Milestone, CalendarEvent, Objective, Note, LifeArea } from './types';
 
 // Components
+import { Auth } from './components/Auth';
 import { CalendarSection } from './components/CalendarSection';
 import { DailyChecklist } from './components/DailyChecklist';
 import { TaskForce } from './components/TaskForce';
@@ -33,7 +38,12 @@ import { Notes } from './components/Notes';
 import { Card, ProgressBar, NotificationToast } from './components/UIComponents';
 
 const App: React.FC = () => {
-  // --- State ---
+  // --- Auth State ---
+  const [user, setUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [dataLoading, setDataLoading] = useState(false);
+
+  // --- App State ---
   const [activeTab, setActiveTab] = useState(() => {
     if (typeof localStorage !== 'undefined') {
       return localStorage.getItem('ONYX_ACTIVE_TAB') || 'dashboard';
@@ -58,13 +68,39 @@ const App: React.FC = () => {
     lastLoginDate: new Date().toISOString().split('T')[0]
   });
 
-  // --- Effects ---
+  // --- Auth & Data Sync Effects ---
   useEffect(() => {
-    const loaded = loadState();
-    if (loaded) {
-      setAppState(checkDailyReset(loaded));
-    }
-    
+    const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      setAuthLoading(false);
+      
+      if (currentUser) {
+        // User Logged In: Subscribe to Cloud Data
+        setDataLoading(true);
+        const unsubscribeData = subscribeToData(currentUser.uid, (cloudData) => {
+          if (cloudData) {
+            // Existing user data found
+            setAppState(prev => checkDailyReset(cloudData));
+          } else {
+            // New user (or error), keep default state but stop loading
+            // Optionally, we could load from localStorage here as a fallback
+          }
+          setDataLoading(false);
+        });
+        return () => unsubscribeData();
+      } else {
+        // User Logged Out: Load Local or Reset
+        const localData = loadState();
+        if (localData) {
+          setAppState(checkDailyReset(localData));
+        }
+      }
+    });
+
+    return () => unsubscribeAuth();
+  }, []);
+
+  useEffect(() => {
     // Initialize Audio
     audioRef.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
     audioRef.current.volume = 0.5;
@@ -77,88 +113,76 @@ const App: React.FC = () => {
     };
 
     window.addEventListener('beforeunload', handleBeforeUnload);
-
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
   }, []);
 
+  // Save State on Change
   useEffect(() => {
-    saveState(appState);
-  }, [appState]);
+    if (!authLoading && !dataLoading) {
+      saveState(appState, user?.uid);
+    }
+  }, [appState, user, authLoading, dataLoading]);
 
   useEffect(() => {
     localStorage.setItem('ONYX_ACTIVE_TAB', activeTab);
   }, [activeTab]);
 
   // --- Notification Logic ---
-
-  // 1. Show In-App Toast (For Created Feedback ONLY)
   const showToast = (message: string) => {
     const id = Date.now().toString() + Math.random();
     setToasts(prev => [...prev, { id, message }]);
   };
 
-  // 2. Trigger Due Alert (System Notification + Audio) - NO In-App Toast
   const triggerDueAlert = async (title: string, body: string) => {
-    // Audio
     if (audioRef.current) {
       audioRef.current.play().catch(e => console.log("Audio play blocked", e));
     }
 
-    // Service Worker Notification (Preferred for Android/PWA)
     if ("serviceWorker" in navigator && "Notification" in window) {
         if (Notification.permission === "granted") {
             try {
                 const reg = await navigator.serviceWorker.ready;
-                // Fix: Cast options to any to allow 'vibrate' property which might be missing in NotificationOptions type definition
                 reg.showNotification(title, {
                     body,
-                    icon: '/vite.svg', // Ensure favicon exists or use a generic one
+                    icon: '/vite.svg',
                     badge: '/vite.svg',
                     vibrate: [200, 100, 200],
                     tag: 'onyx-notification'
                 } as any);
-                return; // Success, stop here
+                return;
             } catch (e) {
                 console.error("SW Notification failed, falling back", e);
             }
         }
     }
 
-    // Standard Notification Fallback (Desktop)
     if ("Notification" in window && Notification.permission === "granted") {
         new Notification(title, { 
             body, 
             icon: '/vite.svg' 
         });
     }
-    
-    // NOTE: Removed showToast fallback here as per user request
-    // Alerts will only appear in system tray or play sound.
   };
 
-  // Check for Reminders and Events
   useEffect(() => {
     const checkNotifications = () => {
       const now = new Date();
-      const currentMinuteStr = now.toISOString().slice(0, 16); // YYYY-MM-DDTHH:mm
+      const currentMinuteStr = now.toISOString().slice(0, 16); 
 
-      // Prevent multiple triggers in the same minute
       if (lastCheckedMinuteRef.current === currentMinuteStr) return;
       lastCheckedMinuteRef.current = currentMinuteStr;
 
       const currentTime = now.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
       const today = now.toISOString().split('T')[0];
 
-      // Check Reminders
       appState.tasks.forEach(task => {
         if (task.type === 'reminder' && !task.completed && task.dueDate === today && task.dueTime === currentTime) {
           triggerDueAlert("Reminder Due", task.title);
         }
       });
 
-      // Check Calendar Events
       appState.events.forEach(event => {
         if (event.date === today && event.time === currentTime) {
            triggerDueAlert("Event Starting", event.title);
@@ -166,9 +190,7 @@ const App: React.FC = () => {
       });
     };
 
-    // Check every 5 seconds to catch the minute change accurately
     const interval = setInterval(checkNotifications, 5000); 
-
     return () => clearInterval(interval);
   }, [appState.tasks, appState.events]);
 
@@ -176,7 +198,7 @@ const App: React.FC = () => {
     setToasts(prev => prev.filter(t => t.id !== id));
   };
 
-  // --- Handlers ---
+  // --- Data Helpers ---
   const toggleTask = (id: string) => {
     setAppState(prev => ({
       ...prev,
@@ -287,7 +309,6 @@ const App: React.FC = () => {
     setAppState(prev => ({ ...prev, milestones: prev.milestones.filter(m => m.id !== id) }));
   };
 
-  // Note Handlers
   const addNote = (note: Partial<Note>) => {
     const newNote: Note = {
       id: `n-${Date.now()}`,
@@ -310,7 +331,6 @@ const App: React.FC = () => {
     }));
   };
 
-  // Area Handlers
   const addArea = (area: Partial<LifeArea>) => {
       const newArea: LifeArea = {
           id: `area-${Date.now()}`,
@@ -338,9 +358,8 @@ const App: React.FC = () => {
       }));
   };
 
-
-  // --- Render Helpers ---
-
+  // --- Render Sections ---
+  // (All component logic like DashboardHome etc remains the same as previous step, just using state)
   const DashboardHome = () => {
     const [quickRemind, setQuickRemind] = useState('');
     const [quickRemindTime, setQuickRemindTime] = useState('');
@@ -350,7 +369,6 @@ const App: React.FC = () => {
       if (!quickRemind.trim()) return;
       
       const now = new Date();
-      // If no time set, default to 1 hour from now for quick addition
       const defaultTime = new Date(now.getTime() + 60*60*1000).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
 
       addTask({
@@ -363,8 +381,6 @@ const App: React.FC = () => {
       });
       setQuickRemind('');
       setQuickRemindTime('');
-      
-      // Immediate feedback toast (for CREATION only)
       showToast(`Reminder set for ${quickRemindTime || defaultTime}`);
     };
 
@@ -401,15 +417,12 @@ const App: React.FC = () => {
 
            <Card className="p-4 bg-onyx-900 border-onyx-800">
               <form onSubmit={handleQuickRemind} className="flex flex-col sm:flex-row gap-3 sm:gap-4 sm:items-center">
-                 {/* Input Row on Mobile */}
                  <input 
                    className="flex-1 bg-transparent border-b border-onyx-700 pb-2 text-white placeholder-neutral-500 focus:outline-none focus:border-white transition-colors w-full"
                    placeholder="Quick reminder: Take medicine at 5pm..."
                    value={quickRemind}
                    onChange={e => setQuickRemind(e.target.value)}
                  />
-                 
-                 {/* Time + Button Row on Mobile */}
                  <div className="flex items-center justify-between gap-3 w-full sm:w-auto">
                     <div className="flex items-center gap-1 border-b border-onyx-700 pb-2 flex-1 sm:w-auto sm:flex-none">
                         <Clock size={16} className="text-neutral-500 shrink-0" />
@@ -428,7 +441,7 @@ const App: React.FC = () => {
            </Card>
         </div>
 
-        {/* 1. Task Force Summary - Uniform List Layout */}
+        {/* Widgets */}
         <section>
           <div className="flex items-center justify-between mb-4 cursor-pointer hover:text-white transition-colors" onClick={() => setActiveTab('taskforce')}>
              <div className="flex items-center gap-2 text-neutral-300 font-medium">
@@ -447,11 +460,7 @@ const App: React.FC = () => {
                      {task.priority && (
                         <div className={`w-2 h-2 rounded-full ${task.priority === 'High' ? 'bg-red-500' : task.priority === 'Medium' ? 'bg-yellow-500' : 'bg-green-500'}`}></div>
                      )}
-                     <button 
-                         onClick={() => toggleTask(task.id)}
-                         className="w-7 h-7 rounded-full border-2 border-onyx-700 hover:border-white hover:bg-white text-black flex items-center justify-center transition-all shrink-0 ml-2"
-                         title="Mark Complete"
-                     >
+                     <button onClick={() => toggleTask(task.id)} className="w-7 h-7 rounded-full border-2 border-onyx-700 hover:border-white hover:bg-white text-black flex items-center justify-center transition-all shrink-0 ml-2">
                          <Check size={14} className="opacity-0 group-hover:opacity-100 transition-opacity" />
                      </button>
                   </div>
@@ -465,7 +474,6 @@ const App: React.FC = () => {
           </div>
         </section>
 
-        {/* 2. Operations Summary */}
         <section>
            <div className="flex items-center justify-between mb-4 cursor-pointer hover:text-white transition-colors" onClick={() => setActiveTab('operations')}>
              <div className="flex items-center gap-2 text-neutral-300 font-medium">
@@ -490,7 +498,6 @@ const App: React.FC = () => {
           )}
         </section>
 
-        {/* 3. High Priority Tasks */}
         <section>
           <div className="flex items-center gap-2 mb-4 text-red-400 font-medium">
              <Zap size={18} /> High Priority
@@ -503,11 +510,7 @@ const App: React.FC = () => {
                        <div className="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.4)] shrink-0"></div>
                        <span className="text-white font-medium text-base truncate">{task.title}</span>
                     </div>
-                    <button 
-                        onClick={() => toggleTask(task.id)}
-                        className="w-7 h-7 rounded-full border-2 border-onyx-700 hover:border-red-500 hover:bg-red-500 text-white flex items-center justify-center transition-all shrink-0"
-                        title="Mark Complete"
-                    >
+                    <button onClick={() => toggleTask(task.id)} className="w-7 h-7 rounded-full border-2 border-onyx-700 hover:border-red-500 hover:bg-red-500 text-white flex items-center justify-center transition-all shrink-0">
                         <Check size={14} className="opacity-0 group-hover:opacity-100 transition-opacity" />
                     </button>
                  </div>
@@ -520,7 +523,6 @@ const App: React.FC = () => {
           )}
         </section>
 
-        {/* 4. Calendar View */}
         <section>
            <div className="flex items-center justify-between mb-4 cursor-pointer hover:text-white transition-colors" onClick={() => setActiveTab('calendar')}>
              <div className="flex items-center gap-2 text-neutral-300 font-medium">
@@ -542,7 +544,6 @@ const App: React.FC = () => {
           </div>
         </section>
 
-        {/* 5. Daily Rituals */}
         <section>
            <div className="flex items-center justify-between mb-4 cursor-pointer hover:text-white transition-colors" onClick={() => setActiveTab('rituals')}>
              <div className="flex items-center gap-2 text-neutral-300 font-medium">
@@ -553,7 +554,6 @@ const App: React.FC = () => {
           <ProgressBar progress={dailyProgress} className="mb-4 h-2" />
         </section>
 
-        {/* 6. Life Areas */}
         <section>
            <div className="flex items-center justify-between mb-4 cursor-pointer hover:text-white transition-colors" onClick={() => setActiveTab('areas')}>
              <div className="flex items-center gap-2 text-neutral-300 font-medium">
@@ -571,7 +571,6 @@ const App: React.FC = () => {
              ))}
           </div>
         </section>
-
       </div>
     );
   };
@@ -579,107 +578,25 @@ const App: React.FC = () => {
   const renderContent = () => {
     switch(activeTab) {
       case 'dashboard': return <DashboardHome />;
-      case 'taskforce':
-        return (
-          <TaskForce 
-            tasks={appState.tasks.filter(t => t.type === 'short_term' && !t.tags?.includes('calendar_only'))} 
-            onToggle={toggleTask} 
-            onAdd={addTask} 
-            onDelete={deleteTask}
-            onToggleSubtask={toggleSubtask}
-            onUpdate={updateTask}
-          />
-        );
-      case 'operations':
-        return (
-           <OperationsBoard 
-             tasks={appState.tasks.filter(t => t.type === 'long_term')} 
-             onToggle={toggleTask} 
-             onAdd={addTask} 
-             onToggleSubtask={toggleSubtask}
-             onDelete={deleteTask}
-             onUpdate={updateTask}
-           />
-        );
-      case 'calendar':
-        return (
-           <div className="h-full max-w-4xl mx-auto">
-             <CalendarSection 
-                events={appState.events} 
-                tasks={appState.tasks} 
-                onAddEvent={addEvent} 
-                onAddTask={addTask}
-                onUpdateEvent={updateEvent}
-                onDeleteEvent={deleteEvent}
-                onUpdateTask={updateTask}
-                onDeleteTask={deleteTask}
-             />
-           </div>
-        );
-      case 'reminders':
-        return (
-           <Reminders 
-             reminders={appState.tasks.filter(t => t.type === 'reminder')} 
-             onToggle={toggleTask} 
-             onAdd={addTask} 
-             onDelete={deleteTask}
-           />
-        );
-      case 'rituals':
-        return (
-          <div className="h-full max-w-2xl mx-auto py-4">
-             <DailyChecklist tasks={appState.tasks.filter(t => t.type === 'daily')} onToggle={toggleTask} onAdd={(title) => addTask({ title, type: 'daily' })} />
-          </div>
-        );
-      case 'areas':
-        return (
-          <LifeAreas 
-            areas={appState.areas} 
-            tasks={appState.tasks} 
-            objectives={appState.objectives || []}
-            milestones={appState.milestones || []}
-            onAddTask={addTask}
-            onToggleTask={toggleTask}
-            onDeleteTask={deleteTask}
-            onAddObjective={addObjective}
-            onDeleteObjective={deleteObjective}
-            onAddMilestone={addMilestone}
-            onToggleMilestone={toggleMilestone}
-            onDeleteMilestone={deleteMilestone}
-            onAddArea={addArea}
-            onUpdateArea={updateArea}
-            onDeleteArea={deleteArea}
-          />
-        );
-      case 'notes':
-        return (
-            <Notes 
-                notes={appState.notes || []}
-                onAdd={addNote}
-                onDelete={deleteNote}
-                onUpdate={updateNote}
-            />
-        );
-      default:
-        return null;
+      case 'taskforce': return <TaskForce tasks={appState.tasks.filter(t => t.type === 'short_term' && !t.tags?.includes('calendar_only'))} onToggle={toggleTask} onAdd={addTask} onDelete={deleteTask} onToggleSubtask={toggleSubtask} onUpdate={updateTask} />;
+      case 'operations': return <OperationsBoard tasks={appState.tasks.filter(t => t.type === 'long_term')} onToggle={toggleTask} onAdd={addTask} onToggleSubtask={toggleSubtask} onDelete={deleteTask} onUpdate={updateTask} />;
+      case 'calendar': return <div className="h-full max-w-4xl mx-auto"><CalendarSection events={appState.events} tasks={appState.tasks} onAddEvent={addEvent} onAddTask={addTask} onUpdateEvent={updateEvent} onDeleteEvent={deleteEvent} onUpdateTask={updateTask} onDeleteTask={deleteTask} /></div>;
+      case 'reminders': return <Reminders reminders={appState.tasks.filter(t => t.type === 'reminder')} onToggle={toggleTask} onAdd={addTask} onDelete={deleteTask} />;
+      case 'rituals': return <div className="h-full max-w-2xl mx-auto py-4"><DailyChecklist tasks={appState.tasks.filter(t => t.type === 'daily')} onToggle={toggleTask} onAdd={(title) => addTask({ title, type: 'daily' })} /></div>;
+      case 'areas': return <LifeAreas areas={appState.areas} tasks={appState.tasks} objectives={appState.objectives || []} milestones={appState.milestones || []} onAddTask={addTask} onToggleTask={toggleTask} onDeleteTask={deleteTask} onAddObjective={addObjective} onDeleteObjective={deleteObjective} onAddMilestone={addMilestone} onToggleMilestone={toggleMilestone} onDeleteMilestone={deleteMilestone} onAddArea={addArea} onUpdateArea={updateArea} onDeleteArea={deleteArea} />;
+      case 'notes': return <Notes notes={appState.notes || []} onAdd={addNote} onDelete={deleteNote} onUpdate={updateNote} />;
+      default: return null;
     }
   };
 
   const NavItem = ({ id, icon: Icon, label, badgeCount }: { id: string; icon: any; label: string; badgeCount?: number }) => (
     <button
       onClick={() => { setActiveTab(id); setMobileMenuOpen(false); }}
-      className={`
-        flex items-center gap-3 px-4 py-3 rounded-lg w-full transition-all group
-        ${activeTab === id ? 'bg-white text-black font-semibold' : 'text-neutral-400 hover:text-white hover:bg-onyx-800'}
-      `}
+      className={`flex items-center gap-3 px-4 py-3 rounded-lg w-full transition-all group ${activeTab === id ? 'bg-white text-black font-semibold' : 'text-neutral-400 hover:text-white hover:bg-onyx-800'}`}
     >
       <Icon size={20} />
       <span className="flex-1 text-left">{label}</span>
-      {badgeCount !== undefined && badgeCount > 0 && (
-         <span className={`text-[10px] font-bold px-1.5 rounded-full ${activeTab === id ? 'bg-black text-white' : 'bg-neutral-800 text-white'}`}>
-            {badgeCount}
-         </span>
-      )}
+      {badgeCount !== undefined && badgeCount > 0 && <span className={`text-[10px] font-bold px-1.5 rounded-full ${activeTab === id ? 'bg-black text-white' : 'bg-neutral-800 text-white'}`}>{badgeCount}</span>}
     </button>
   );
 
@@ -687,19 +604,27 @@ const App: React.FC = () => {
   const taskForceCount = appState.tasks.filter(t => t.type === 'short_term' && !t.completed && !t.tags?.includes('calendar_only')).length;
   const operationsCount = appState.tasks.filter(t => t.type === 'long_term' && !t.completed).length;
 
+  // --- Auth Check ---
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-onyx-950 flex items-center justify-center">
+        <Loader2 className="animate-spin text-white" size={32} />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Auth />;
+  }
+
   return (
     <div className="min-h-screen bg-onyx-950 text-neutral-200 font-sans flex overflow-hidden">
-      {/* Notifications Container */}
-      {toasts.map(toast => (
-         <NotificationToast key={toast.id} message={toast.message} onClose={() => removeToast(toast.id)} />
-      ))}
+      {toasts.map(toast => (<NotificationToast key={toast.id} message={toast.message} onClose={() => removeToast(toast.id)} />))}
 
-      {/* Desktop Sidebar */}
       <aside className="hidden md:flex flex-col w-64 border-r border-onyx-800 bg-onyx-900/30 p-4">
         <div className="mb-8 px-4 py-2">
           <h1 onClick={() => setActiveTab('dashboard')} className="text-2xl font-bold tracking-tighter text-white cursor-pointer hover:text-neutral-300 transition-colors">ONYX.</h1>
         </div>
-        
         <nav className="flex-1 space-y-1">
           <NavItem id="dashboard" icon={Layout} label="Dashboard" />
           <div className="my-4 border-t border-onyx-800 mx-4"></div>
@@ -711,37 +636,24 @@ const App: React.FC = () => {
           <NavItem id="areas" icon={Layers} label="Life Areas" />
           <NavItem id="notes" icon={Notebook} label="Notes" />
         </nav>
-
-        <button 
-          onClick={() => setShowAI(true)}
-          className="mt-auto bg-onyx-800 border border-onyx-700 p-4 rounded-xl flex items-center gap-3 hover:border-white transition-colors group"
-        >
-          <div className="bg-white text-black p-2 rounded-lg group-hover:scale-110 transition-transform">
-            <MessageSquare size={18} />
-          </div>
-          <div className="text-left">
-            <div className="text-xs text-neutral-500 uppercase">Assistant</div>
-            <div className="text-sm font-medium text-white">Ask Onyx AI</div>
-          </div>
+        <button onClick={() => signOut(auth)} className="mt-auto mb-4 mx-2 flex items-center gap-2 text-neutral-500 hover:text-red-400 text-sm p-2 rounded hover:bg-onyx-800 transition-colors">
+          <LogOut size={16} /> Sign Out
+        </button>
+        <button onClick={() => setShowAI(true)} className="bg-onyx-800 border border-onyx-700 p-4 rounded-xl flex items-center gap-3 hover:border-white transition-colors group">
+          <div className="bg-white text-black p-2 rounded-lg group-hover:scale-110 transition-transform"><MessageSquare size={18} /></div>
+          <div className="text-left"><div className="text-xs text-neutral-500 uppercase">Assistant</div><div className="text-sm font-medium text-white">Ask Onyx AI</div></div>
         </button>
       </aside>
 
-      {/* Main Content */}
       <main className="flex-1 flex flex-col relative overflow-hidden h-screen">
-        {/* Mobile Header */}
         <header className="md:hidden flex items-center justify-between p-4 border-b border-onyx-800 bg-onyx-950 z-20">
           <h1 onClick={() => setActiveTab('dashboard')} className="text-xl font-bold text-white cursor-pointer">ONYX.</h1>
           <div className="flex gap-2">
-            <button onClick={() => setShowAI(!showAI)} className="p-2 text-white">
-              <MessageSquare size={24} />
-            </button>
-            <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="p-2 text-white">
-              {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
-            </button>
+            <button onClick={() => setShowAI(!showAI)} className="p-2 text-white"><MessageSquare size={24} /></button>
+            <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="p-2 text-white">{mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}</button>
           </div>
         </header>
 
-        {/* Mobile Menu Overlay */}
         {mobileMenuOpen && (
           <div className="md:hidden absolute inset-0 bg-onyx-950 z-30 pt-20 px-4 space-y-2">
             <NavItem id="dashboard" icon={Layout} label="Dashboard" />
@@ -753,15 +665,21 @@ const App: React.FC = () => {
             <NavItem id="rituals" icon={CheckSquare} label="Daily Rituals" />
             <NavItem id="areas" icon={Layers} label="Life Areas" />
             <NavItem id="notes" icon={Notebook} label="Notes" />
+            <button onClick={() => signOut(auth)} className="w-full flex items-center justify-center gap-2 p-4 text-red-400 bg-onyx-900 rounded-lg mt-8"><LogOut size={20}/> Sign Out</button>
           </div>
         )}
 
-        {/* Content Area */}
         <div className="flex-1 overflow-y-auto p-4 md:p-8 scroll-smooth relative">
-          {renderContent()}
+          {dataLoading ? (
+            <div className="h-full flex flex-col items-center justify-center text-neutral-500 gap-4">
+               <Loader2 className="animate-spin" size={32} />
+               <p className="text-sm uppercase tracking-widest">Syncing Data...</p>
+            </div>
+          ) : (
+            renderContent()
+          )}
         </div>
 
-        {/* AI Overlay */}
         {showAI && (
           <div className="absolute inset-y-0 right-0 w-full md:w-[400px] bg-onyx-950 border-l border-onyx-800 shadow-2xl z-50 transform transition-transform animate-in slide-in-from-right duration-300">
             <AIAssistant appState={appState} onClose={() => setShowAI(false)} isMobile={false} />

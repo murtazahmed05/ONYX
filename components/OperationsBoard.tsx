@@ -85,6 +85,14 @@ export const OperationsBoard: React.FC<OperationsBoardProps> = ({ tasks, onToggl
     }
   };
 
+  const manualAddTag = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (tagInput.trim() && !tags.includes(tagInput.trim())) {
+      setTags([...tags, tagInput.trim()]);
+      setTagInput('');
+    }
+  };
+
   const removeTag = (tagToRemove: string) => {
     setTags(tags.filter(t => t !== tagToRemove));
   };
@@ -140,6 +148,14 @@ export const OperationsBoard: React.FC<OperationsBoardProps> = ({ tasks, onToggl
       }
       setEditTagInput('');
     }
+  };
+
+  const manualAddEditTag = (e: React.MouseEvent) => {
+      e.preventDefault();
+      if (editTagInput.trim() && !editForm.tags.includes(editTagInput.trim())) {
+        setEditForm({...editForm, tags: [...editForm.tags, editTagInput.trim()]});
+        setEditTagInput('');
+      }
   };
 
   const removeEditTag = (tag: string) => {
@@ -223,6 +239,14 @@ export const OperationsBoard: React.FC<OperationsBoardProps> = ({ tasks, onToggl
                 onChange={(e) => setTagInput(e.target.value)}
                 onKeyDown={addTag}
               />
+              <button 
+                type="button" 
+                onClick={manualAddTag} 
+                className="text-neutral-500 hover:text-white p-1 rounded hover:bg-onyx-700 transition-colors"
+                title="Add Tag"
+              >
+                <Plus size={16}/>
+              </button>
             </div>
 
             {/* Subtasks Input */}
@@ -306,6 +330,14 @@ export const OperationsBoard: React.FC<OperationsBoardProps> = ({ tasks, onToggl
                                     onChange={(e) => setEditTagInput(e.target.value)}
                                     onKeyDown={addEditTag}
                                 />
+                                <button 
+                                    type="button" 
+                                    onClick={manualAddEditTag} 
+                                    className="text-neutral-500 hover:text-white p-1 rounded hover:bg-onyx-700 transition-colors"
+                                    title="Add Tag"
+                                >
+                                    <Plus size={16}/>
+                                </button>
                             </div>
 
                              {/* Edit Subtasks */}

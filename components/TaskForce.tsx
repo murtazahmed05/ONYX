@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Task, Priority } from '../types';
 import { Card, Badge } from './UIComponents';
 import { Activity, Plus, X, ChevronDown, ChevronRight, Check, Tag, ChevronUp, Trash2 } from 'lucide-react';
+import { formatDistanceToNow } from 'date-fns';
 
 interface TaskForceProps {
   tasks: Task[];
@@ -85,15 +86,6 @@ export const TaskForce: React.FC<TaskForceProps> = ({ tasks, onToggle, onAdd, on
 
   const removeTag = (tagToRemove: string) => {
     setTags(tags.filter(t => t !== tagToRemove));
-  };
-
-  const priorityColor = (p?: Priority) => {
-    switch(p) {
-      case 'High': return 'text-red-300 border-red-900/50';
-      case 'Medium': return 'text-yellow-300 border-yellow-900/50';
-      case 'Low': return 'text-green-300 border-green-900/50';
-      default: return 'text-neutral-400';
-    }
   };
 
   return (
@@ -195,8 +187,8 @@ export const TaskForce: React.FC<TaskForceProps> = ({ tasks, onToggle, onAdd, on
         </Card>
       )}
 
-      {/* Active Tasks - Uniform List Style */}
-      <div className="flex flex-col gap-2 pb-10">
+      {/* Active Tasks - Operations Board Style (Vertical Timeline) */}
+      <div className="flex flex-col gap-4 pb-10">
         {activeTasks.map(task => (
           <div key={task.id} className="relative pl-6 border-l border-onyx-700 py-2 hover:border-white transition-colors group">
             {/* Completion Toggle */}
@@ -205,22 +197,27 @@ export const TaskForce: React.FC<TaskForceProps> = ({ tasks, onToggle, onAdd, on
               onClick={() => onToggle(task.id)}
             ></div>
             
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-col gap-2">
               <div className="flex justify-between items-start">
                   <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                          <h3 className="text-neutral-200 font-medium text-sm leading-tight">{task.title}</h3>
+                      <div className="flex items-center gap-3">
+                          <h3 className="text-neutral-200 font-medium text-lg leading-tight">{task.title}</h3>
                       </div>
-                      <div className="flex gap-3 mt-1 text-xs text-neutral-500 items-center min-h-[16px]">
+                      <div className="flex gap-3 mt-2 text-xs text-neutral-500 items-center">
+                           {task.dueDate && (
+                             <span className="flex items-center gap-1">
+                                Due {formatDistanceToNow(new Date(task.dueDate), { addSuffix: true })}
+                             </span>
+                           )}
                           {task.priority && (
-                              <span className={`uppercase tracking-wider text-[9px] border px-1 rounded ${priorityColor(task.priority)}`}>
-                                {task.priority}
+                              <span className={`uppercase tracking-wider font-medium ${task.priority === 'High' ? 'text-red-400' : task.priority === 'Medium' ? 'text-neutral-400' : 'text-neutral-500'}`}>
+                                {task.priority} Priority
                               </span>
                           )}
                           {task.tags && task.tags.length > 0 && (
-                            <div className="flex gap-1">
+                            <div className="flex gap-1 ml-1">
                                 {task.tags.map(tag => (
-                                <span key={tag} className="text-[9px] text-neutral-400 bg-onyx-900 px-1 py-0.5 rounded">#{tag}</span>
+                                <span key={tag} className="px-1.5 py-0.5 rounded bg-onyx-800 text-neutral-400">#{tag}</span>
                                 ))}
                             </div>
                           )}
@@ -228,13 +225,13 @@ export const TaskForce: React.FC<TaskForceProps> = ({ tasks, onToggle, onAdd, on
                   </div>
                   
                   <button onClick={() => onDelete(task.id)} className="text-neutral-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity p-1">
-                      <Trash2 size={14} />
+                      <Trash2 size={16} />
                   </button>
               </div>
 
               {/* Render Subtasks */}
               {task.subtasks && task.subtasks.length > 0 && (
-                  <div className="pl-1 mt-1 space-y-1">
+                  <div className="pl-1 mt-1 space-y-1.5">
                   {task.subtasks.map(st => (
                       <div key={st.id} className="flex items-center gap-2">
                           <div 
@@ -243,7 +240,7 @@ export const TaskForce: React.FC<TaskForceProps> = ({ tasks, onToggle, onAdd, on
                           >
                               {st.completed && <Check size={8} className="text-black" />}
                           </div>
-                          <span className={`text-xs ${st.completed ? 'text-neutral-600 line-through' : 'text-neutral-400'}`}>{st.title}</span>
+                          <span className={`text-sm ${st.completed ? 'text-neutral-600 line-through' : 'text-neutral-400'}`}>{st.title}</span>
                       </div>
                   ))}
                   </div>

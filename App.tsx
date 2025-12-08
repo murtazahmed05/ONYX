@@ -54,6 +54,9 @@ const App: React.FC = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [toasts, setToasts] = useState<{id: string; message: string}[]>([]);
   
+  // Sync Control
+  const isRemoteUpdate = useRef(false);
+
   // Notification Audio Ref
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const lastCheckedMinuteRef = useRef<string>('');
@@ -80,6 +83,7 @@ const App: React.FC = () => {
         const unsubscribeData = subscribeToData(currentUser.uid, (cloudData) => {
           if (cloudData) {
             // Existing user data found
+            isRemoteUpdate.current = true; // Flag this as a remote update
             setAppState(prev => checkDailyReset(cloudData));
           } else {
             // New user (or error), keep default state but stop loading
@@ -121,6 +125,12 @@ const App: React.FC = () => {
   // Save State on Change
   useEffect(() => {
     if (!authLoading && !dataLoading) {
+      if (isRemoteUpdate.current) {
+        // This update came from the cloud, so we don't need to save it back.
+        // Reset the flag and exit.
+        isRemoteUpdate.current = false;
+        return;
+      }
       saveState(appState, user?.uid);
     }
   }, [appState, user, authLoading, dataLoading]);

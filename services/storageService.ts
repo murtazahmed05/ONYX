@@ -26,7 +26,10 @@ export const saveState = async (state: AppState, userId?: string) => {
   // If logged in, sync to cloud
   if (userId) {
     try {
-      await setDoc(doc(db, 'users', userId), state);
+      // ERROR FIX: Firestore does not support 'undefined' values.
+      // We perform a JSON round-trip to strip out any keys with undefined values.
+      const sanitizedState = JSON.parse(JSON.stringify(state));
+      await setDoc(doc(db, 'users', userId), sanitizedState);
     } catch (e) {
       console.error("Failed to sync to cloud", e);
     }

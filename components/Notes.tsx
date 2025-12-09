@@ -44,6 +44,13 @@ export const Notes: React.FC<NotesProps> = ({ notes, onAdd, onDelete, onUpdate }
     }
   };
 
+  const handleDeleteExpanded = () => {
+    if (selectedNote) {
+        onDelete(selectedNote.id);
+        setSelectedNote(null);
+    }
+  };
+
   return (
     <div className="h-full flex flex-col space-y-6 max-w-4xl mx-auto">
       <div className="flex items-center justify-between">
@@ -99,6 +106,7 @@ export const Notes: React.FC<NotesProps> = ({ notes, onAdd, onDelete, onUpdate }
                     <button 
                     onClick={(e) => { e.stopPropagation(); onDelete(note.id); }}
                     className="text-neutral-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                    title="Delete Note"
                     >
                     <Trash2 size={16} />
                     </button>
@@ -127,9 +135,18 @@ export const Notes: React.FC<NotesProps> = ({ notes, onAdd, onDelete, onUpdate }
             <div className="bg-onyx-900 border border-onyx-700 w-full max-w-2xl rounded-xl shadow-2xl flex flex-col max-h-[90vh]">
                 <div className="flex justify-between items-center p-4 border-b border-onyx-800">
                     <h3 className="text-lg font-bold text-white">{selectedNote.title}</h3>
-                    <button onClick={() => setSelectedNote(null)} className="text-neutral-500 hover:text-white p-1">
-                        <X size={20} />
-                    </button>
+                    <div className="flex gap-2">
+                        <button 
+                            onClick={handleDeleteExpanded} 
+                            className="text-neutral-500 hover:text-red-400 p-1"
+                            title="Delete Note"
+                        >
+                            <Trash2 size={20} />
+                        </button>
+                        <button onClick={() => setSelectedNote(null)} className="text-neutral-500 hover:text-white p-1">
+                            <X size={20} />
+                        </button>
+                    </div>
                 </div>
                 <div className="flex-1 p-4 overflow-y-auto">
                     <textarea 

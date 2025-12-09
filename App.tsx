@@ -12,9 +12,7 @@ import {
   ArrowRight,
   Activity,
   Plus,
-  Bell,
   Notebook,
-  Clock,
   Check,
   LogOut,
   Loader2
@@ -33,7 +31,6 @@ import { TaskForce } from './components/TaskForce';
 import { OperationsBoard } from './components/OperationsBoard';
 import { LifeAreas } from './components/LifeAreas';
 import { AIAssistant } from './components/AIAssistant';
-import { Reminders } from './components/Reminders';
 import { Notes } from './components/Notes';
 import { Card, ProgressBar, NotificationToast } from './components/UIComponents';
 
@@ -357,31 +354,7 @@ const App: React.FC = () => {
   };
 
   // --- Render Sections ---
-  // (All component logic like DashboardHome etc remains the same as previous step, just using state)
   const DashboardHome = () => {
-    const [quickRemind, setQuickRemind] = useState('');
-    const [quickRemindTime, setQuickRemindTime] = useState('');
-
-    const handleQuickRemind = (e: React.FormEvent) => {
-      e.preventDefault();
-      if (!quickRemind.trim()) return;
-      
-      const now = new Date();
-      const defaultTime = new Date(now.getTime() + 60*60*1000).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
-
-      addTask({
-        title: quickRemind,
-        type: 'reminder', 
-        tags: [],
-        priority: 'Medium',
-        dueDate: now.toISOString().split('T')[0],
-        dueTime: quickRemindTime || defaultTime
-      });
-      setQuickRemind('');
-      setQuickRemindTime('');
-      showToast(`Reminder set for ${quickRemindTime || defaultTime}`);
-    };
-
     const highPriority = appState.tasks.filter(t => t.type === 'short_term' && !t.completed && t.priority === 'High' && !t.tags?.includes('calendar_only'));
     const taskForceTasks = appState.tasks.filter(t => t.type === 'short_term' && !t.completed && !t.tags?.includes('calendar_only'));
     const operations = appState.tasks.filter(t => t.type === 'long_term' && !t.completed);
@@ -412,31 +385,7 @@ const App: React.FC = () => {
                 <div className="text-neutral-500">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</div>
               </div>
            </div>
-
-           <Card className="p-4 bg-onyx-900 border-onyx-800">
-              <form onSubmit={handleQuickRemind} className="flex flex-col sm:flex-row gap-3 sm:gap-4 sm:items-center">
-                 <input 
-                   className="flex-1 bg-transparent border-b border-onyx-700 pb-2 text-white placeholder-neutral-500 focus:outline-none focus:border-white transition-colors w-full"
-                   placeholder="Quick reminder: Take medicine at 5pm..."
-                   value={quickRemind}
-                   onChange={e => setQuickRemind(e.target.value)}
-                 />
-                 <div className="flex items-center justify-between gap-3 w-full sm:w-auto">
-                    <div className="flex items-center gap-1 border-b border-onyx-700 pb-2 flex-1 sm:w-auto sm:flex-none">
-                        <Clock size={16} className="text-neutral-500 shrink-0" />
-                        <input 
-                          type="time"
-                          className="bg-transparent text-sm text-neutral-300 focus:text-white focus:outline-none w-full sm:w-auto"
-                          value={quickRemindTime}
-                          onChange={e => setQuickRemindTime(e.target.value)}
-                        />
-                    </div>
-                    <button type="submit" className="text-neutral-400 hover:text-white transition-colors shrink-0">
-                       <Plus size={24} />
-                    </button>
-                 </div>
-              </form>
-           </Card>
+           {/* Quick Reminder Widget Removed as per request */}
         </div>
 
         {/* Widgets */}
@@ -579,8 +528,8 @@ const App: React.FC = () => {
       case 'taskforce': return <TaskForce tasks={appState.tasks.filter(t => t.type === 'short_term' && !t.tags?.includes('calendar_only'))} onToggle={toggleTask} onAdd={addTask} onDelete={deleteTask} onToggleSubtask={toggleSubtask} onUpdate={updateTask} />;
       case 'operations': return <OperationsBoard tasks={appState.tasks.filter(t => t.type === 'long_term')} onToggle={toggleTask} onAdd={addTask} onToggleSubtask={toggleSubtask} onDelete={deleteTask} onUpdate={updateTask} />;
       case 'calendar': return <div className="h-full max-w-4xl mx-auto"><CalendarSection events={appState.events} tasks={appState.tasks} onAddEvent={addEvent} onAddTask={addTask} onUpdateEvent={updateEvent} onDeleteEvent={deleteEvent} onUpdateTask={updateTask} onDeleteTask={deleteTask} /></div>;
-      case 'reminders': return <Reminders reminders={appState.tasks.filter(t => t.type === 'reminder')} onToggle={toggleTask} onAdd={addTask} onDelete={deleteTask} />;
-      case 'rituals': return <div className="h-full max-w-2xl mx-auto py-4"><DailyChecklist tasks={appState.tasks.filter(t => t.type === 'daily')} onToggle={toggleTask} onAdd={(title) => addTask({ title, type: 'daily' })} /></div>;
+      // Reminders Route Removed
+      case 'rituals': return <div className="h-full max-w-2xl mx-auto py-4"><DailyChecklist tasks={appState.tasks.filter(t => t.type === 'daily')} onToggle={toggleTask} onAdd={(title) => addTask({ title, type: 'daily' })} onDelete={deleteTask} /></div>;
       case 'areas': return <LifeAreas areas={appState.areas} tasks={appState.tasks} objectives={appState.objectives || []} milestones={appState.milestones || []} onAddTask={addTask} onToggleTask={toggleTask} onDeleteTask={deleteTask} onAddObjective={addObjective} onDeleteObjective={deleteObjective} onAddMilestone={addMilestone} onToggleMilestone={toggleMilestone} onDeleteMilestone={deleteMilestone} onAddArea={addArea} onUpdateArea={updateArea} onDeleteArea={deleteArea} />;
       case 'notes': return <Notes notes={appState.notes || []} onAdd={addNote} onDelete={deleteNote} onUpdate={updateNote} />;
       default: return null;
@@ -598,7 +547,6 @@ const App: React.FC = () => {
     </button>
   );
 
-  const reminderCount = appState.tasks.filter(t => t.type === 'reminder' && !t.completed).length;
   const taskForceCount = appState.tasks.filter(t => t.type === 'short_term' && !t.completed && !t.tags?.includes('calendar_only')).length;
   const operationsCount = appState.tasks.filter(t => t.type === 'long_term' && !t.completed).length;
 
@@ -629,7 +577,7 @@ const App: React.FC = () => {
           <NavItem id="taskforce" icon={Activity} label="Task Force" badgeCount={taskForceCount} />
           <NavItem id="operations" icon={Target} label="Operations" badgeCount={operationsCount} />
           <NavItem id="calendar" icon={CalIcon} label="Calendar" />
-          <NavItem id="reminders" icon={Bell} label="Reminders" badgeCount={reminderCount} />
+          {/* Reminders Nav Item Removed */}
           <NavItem id="rituals" icon={CheckSquare} label="Daily Rituals" />
           <NavItem id="areas" icon={Layers} label="Life Areas" />
           <NavItem id="notes" icon={Notebook} label="Notes" />
@@ -659,7 +607,7 @@ const App: React.FC = () => {
             <NavItem id="taskforce" icon={Activity} label="Task Force" badgeCount={taskForceCount} />
             <NavItem id="operations" icon={Target} label="Operations" badgeCount={operationsCount} />
             <NavItem id="calendar" icon={CalIcon} label="Calendar" />
-            <NavItem id="reminders" icon={Bell} label="Reminders" badgeCount={reminderCount} />
+            {/* Reminders Mobile Nav Item Removed */}
             <NavItem id="rituals" icon={CheckSquare} label="Daily Rituals" />
             <NavItem id="areas" icon={Layers} label="Life Areas" />
             <NavItem id="notes" icon={Notebook} label="Notes" />

@@ -1,14 +1,14 @@
+
 import { GoogleGenAI } from "@google/genai";
 import { AppState, ChatMessage } from "../types";
 
-// Initialize AI Client
+// Initialize AI Client following the pattern: new GoogleGenAI({ apiKey: process.env.API_KEY })
 const getClient = () => {
-  const apiKey = process.env.API_KEY;
-  if (!apiKey) {
+  if (!process.env.API_KEY) {
     console.warn("API_KEY not found in environment variables.");
     return null;
   }
-  return new GoogleGenAI({ apiKey });
+  return new GoogleGenAI({ apiKey: process.env.API_KEY });
 };
 
 export const sendMessageToGemini = async (
@@ -16,8 +16,8 @@ export const sendMessageToGemini = async (
   newMessage: string,
   contextData: AppState
 ): Promise<string> => {
-  const client = getClient();
-  if (!client) return "Error: API Key is missing. Please check your configuration.";
+  const ai = getClient();
+  if (!ai) return "Error: API Key is missing. Please check your configuration.";
 
   // Prepare system context from App State
   const contextSummary = `
@@ -30,8 +30,12 @@ export const sendMessageToGemini = async (
     - Long Term Operations: ${contextData.tasks.filter(t => t.type === 'long_term').map(t => `${t.title} (Due: ${t.dueDate})`).join(', ')}
     - Life Areas: ${contextData.areas.map(a => a.name).join(', ')}
     - Life Milestones: ${contextData.milestones.map(m => `${m.title} (${m.completed ? 'Achieved' : 'In Progress'})`).join(', ')}
-    - Upcoming Events: ${contextData.events.map(e => `${e.title} on ${e.date}`).join(', ')}
+    - Notes: ${contextData.notes.map(n => n.title).join(', ')}
+  `;
 
+  const systemInstruction = `
+    You are a helpful productivity assistant integrated into the Onyx app.
+    ${contextSummary}
     INSTRUCTIONS:
     - Be concise, direct, and helpful. 
     - Maintain the "minimalist, jet-black" persona of the app.
@@ -40,10 +44,10 @@ export const sendMessageToGemini = async (
   `;
 
   try {
-    const response = await client.models.generateContent({
+    // Correctly call generateContent with model and contents parameters
+    const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: [
-        { role: 'user', parts: [{ text: `System Context: ${contextSummary}` }] }, // Priming the model with context in the first message turn invisible to user effectively or appended
         ...history.map(msg => ({
           role: msg.role === 'user' ? 'user' : 'model',
           parts: [{ text: msg.text }]
@@ -51,10 +55,11 @@ export const sendMessageToGemini = async (
         { role: 'user', parts: [{ text: newMessage }] }
       ],
       config: {
-        systemInstruction: "You are a helpful productivity assistant integrated into the Onyx app."
+        systemInstruction: systemInstruction
       }
     });
 
+    // Directly access the .text property from GenerateContentResponse
     return response.text || "I couldn't generate a response.";
   } catch (error) {
     console.error("Gemini API Error:", error);

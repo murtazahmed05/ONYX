@@ -1,3 +1,5 @@
+
+
 export type Priority = 'High' | 'Medium' | 'Low';
 
 export interface SubTask {
@@ -49,14 +51,6 @@ export interface LifeArea {
   description?: string;
 }
 
-export interface CalendarEvent {
-  id: string;
-  title: string;
-  date: string; // ISO Date string
-  time?: string;
-  description?: string;
-}
-
 export interface ChatMessage {
   id: string;
   role: 'user' | 'model';
@@ -64,12 +58,21 @@ export interface ChatMessage {
   timestamp: number;
 }
 
+// Added missing CalendarEvent interface to fix compilation error in CalendarSection.tsx
+export interface CalendarEvent {
+  id: string;
+  title: string;
+  date: string; // YYYY-MM-DD
+  time?: string; // HH:mm
+}
+
 export interface AppState {
   tasks: Task[];
   areas: LifeArea[];
-  events: CalendarEvent[];
   objectives: Objective[];
   milestones: Milestone[];
   notes: Note[];
   lastLoginDate: string;
+  // Support for calendar events in state
+  events?: CalendarEvent[];
 }

@@ -1,7 +1,7 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Layout, 
-  Calendar as CalIcon, 
   CheckSquare, 
   Zap, 
   Target, 
@@ -15,17 +15,17 @@ import {
   Notebook,
   Check,
   LogOut,
-  Loader2
+  Loader2,
+  ChevronRight
 } from 'lucide-react';
 import { auth } from './services/firebase';
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
 import { loadState, saveState, checkDailyReset, subscribeToData } from './services/storageService';
-import { INITIAL_TASKS, INITIAL_AREAS, INITIAL_EVENTS, INITIAL_MILESTONES, INITIAL_OBJECTIVES, INITIAL_NOTES } from './constants';
-import { AppState, Task, Milestone, CalendarEvent, Objective, Note, LifeArea } from './types';
+import { INITIAL_TASKS, INITIAL_AREAS, INITIAL_MILESTONES, INITIAL_OBJECTIVES, INITIAL_NOTES } from './constants';
+import { AppState, Task, Milestone, Objective, Note, LifeArea } from './types';
 
 // Components
 import { Auth } from './components/Auth';
-import { CalendarSection } from './components/CalendarSection';
 import { DailyChecklist } from './components/DailyChecklist';
 import { TaskForce } from './components/TaskForce';
 import { OperationsBoard } from './components/OperationsBoard';
@@ -61,7 +61,6 @@ const App: React.FC = () => {
   const [appState, setAppState] = useState<AppState>({
     tasks: INITIAL_TASKS,
     areas: INITIAL_AREAS,
-    events: INITIAL_EVENTS,
     milestones: INITIAL_MILESTONES,
     objectives: INITIAL_OBJECTIVES,
     notes: INITIAL_NOTES,
@@ -79,12 +78,8 @@ const App: React.FC = () => {
         setDataLoading(true);
         const unsubscribeData = subscribeToData(currentUser.uid, (cloudData) => {
           if (cloudData) {
-            // Existing user data found
-            isRemoteUpdate.current = true; // Flag this as a remote update
+            isRemoteUpdate.current = true;
             setAppState(prev => checkDailyReset(cloudData));
-          } else {
-            // New user (or error), keep default state but stop loading
-            // Optionally, we could load from localStorage here as a fallback
           }
           setDataLoading(false);
         });
@@ -111,8 +106,6 @@ const App: React.FC = () => {
   useEffect(() => {
     if (!authLoading && !dataLoading) {
       if (isRemoteUpdate.current) {
-        // This update came from the cloud, so we don't need to save it back.
-        // Reset the flag and exit.
         isRemoteUpdate.current = false;
         return;
       }
@@ -125,11 +118,6 @@ const App: React.FC = () => {
   }, [activeTab]);
 
   // --- Notification Logic ---
-  const showToast = (message: string) => {
-    const id = Date.now().toString() + Math.random();
-    setToasts(prev => [...prev, { id, message }]);
-  };
-
   const triggerDueAlert = async (title: string, body: string) => {
     if (audioRef.current) {
       audioRef.current.play().catch(e => console.log("Audio play blocked", e));
@@ -152,13 +140,6 @@ const App: React.FC = () => {
             }
         }
     }
-
-    if ("Notification" in window && Notification.permission === "granted") {
-        new Notification(title, { 
-            body, 
-            icon: '/vite.svg' 
-        });
-    }
   };
 
   useEffect(() => {
@@ -177,17 +158,11 @@ const App: React.FC = () => {
           triggerDueAlert("Reminder Due", task.title);
         }
       });
-
-      appState.events.forEach(event => {
-        if (event.date === today && event.time === currentTime) {
-           triggerDueAlert("Event Starting", event.title);
-        }
-      });
     };
 
     const interval = setInterval(checkNotifications, 5000); 
     return () => clearInterval(interval);
-  }, [appState.tasks, appState.events]);
+  }, [appState.tasks]);
 
   const removeToast = (id: string) => {
     setToasts(prev => prev.filter(t => t.id !== id));
@@ -242,27 +217,6 @@ const App: React.FC = () => {
 
   const deleteTask = (id: string) => {
     setAppState(prev => ({ ...prev, tasks: prev.tasks.filter(t => t.id !== id) }));
-  };
-
-  const addEvent = (event: Partial<CalendarEvent>) => {
-    const newEvent: CalendarEvent = {
-       id: `e-${Date.now()}`,
-       title: event.title || 'New Event',
-       date: event.date || new Date().toISOString().split('T')[0],
-       ...event
-    };
-    setAppState(prev => ({ ...prev, events: [...prev.events, newEvent] }));
-  };
-
-  const updateEvent = (id: string, updates: Partial<CalendarEvent>) => {
-    setAppState(prev => ({
-      ...prev,
-      events: prev.events.map(e => e.id === id ? { ...e, ...updates } : e)
-    }));
-  };
-
-  const deleteEvent = (id: string) => {
-    setAppState(prev => ({ ...prev, events: prev.events.filter(e => e.id !== id) }));
   };
 
   const addObjective = (objective: Partial<Objective>) => {
@@ -355,8 +309,8 @@ const App: React.FC = () => {
 
   // --- Render Sections ---
   const DashboardHome = () => {
-    const highPriority = appState.tasks.filter(t => t.type === 'short_term' && !t.completed && t.priority === 'High' && !t.tags?.includes('calendar_only'));
-    const taskForceTasks = appState.tasks.filter(t => t.type === 'short_term' && !t.completed && !t.tags?.includes('calendar_only'));
+    const highPriority = appState.tasks.filter(t => t.type === 'short_term' && !t.completed && t.priority === 'High');
+    const taskForceTasks = appState.tasks.filter(t => t.type === 'short_term' && !t.completed);
     const operations = appState.tasks.filter(t => t.type === 'long_term' && !t.completed);
     
     const dailyTasks = appState.tasks.filter(t => t.type === 'daily');
@@ -376,8 +330,11 @@ const App: React.FC = () => {
         };
     });
 
+    // Dashboard Recent Notes
+    const recentNotes = [...(appState.notes || [])].sort((a, b) => b.createdAt - a.createdAt).slice(0, 3);
+
     return (
-      <div className="space-y-8 max-w-5xl mx-auto pb-6">
+      <div className="space-y-8 max-w-5xl mx-auto pb-10">
         <div className="flex flex-col gap-6">
            <div className="flex justify-between items-end">
               <div>
@@ -385,10 +342,9 @@ const App: React.FC = () => {
                 <div className="text-neutral-500">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</div>
               </div>
            </div>
-           {/* Quick Reminder Widget Removed as per request */}
         </div>
 
-        {/* Widgets */}
+        {/* Task Force Widget */}
         <section>
           <div className="flex items-center justify-between mb-4 cursor-pointer hover:text-white transition-colors" onClick={() => setActiveTab('taskforce')}>
              <div className="flex items-center gap-2 text-neutral-300 font-medium">
@@ -421,6 +377,7 @@ const App: React.FC = () => {
           </div>
         </section>
 
+        {/* Operations Widget */}
         <section>
            <div className="flex items-center justify-between mb-4 cursor-pointer hover:text-white transition-colors" onClick={() => setActiveTab('operations')}>
              <div className="flex items-center gap-2 text-neutral-300 font-medium">
@@ -445,62 +402,7 @@ const App: React.FC = () => {
           )}
         </section>
 
-        <section>
-          <div className="flex items-center gap-2 mb-4 text-red-400 font-medium">
-             <Zap size={18} /> High Priority
-          </div>
-          {highPriority.length > 0 ? (
-            <div className="flex flex-col gap-3">
-               {highPriority.map(task => (
-                 <div key={task.id} className="group flex items-center justify-between p-4 rounded-xl bg-onyx-900 border border-red-900/20 hover:border-red-500/40 transition-all shadow-sm">
-                    <div className="flex items-center gap-4 overflow-hidden">
-                       <div className="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.4)] shrink-0"></div>
-                       <span className="text-white font-medium text-base truncate">{task.title}</span>
-                    </div>
-                    <button onClick={() => toggleTask(task.id)} className="w-7 h-7 rounded-full border-2 border-onyx-700 hover:border-red-500 hover:bg-red-500 text-white flex items-center justify-center transition-all shrink-0">
-                        <Check size={14} className="opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </button>
-                 </div>
-               ))}
-            </div>
-          ) : (
-            <div className="p-8 text-center border border-dashed border-onyx-800 rounded-xl text-neutral-600 text-sm">
-               No high priority tasks.
-            </div>
-          )}
-        </section>
-
-        <section>
-           <div className="flex items-center justify-between mb-4 cursor-pointer hover:text-white transition-colors" onClick={() => setActiveTab('calendar')}>
-             <div className="flex items-center gap-2 text-neutral-300 font-medium">
-                <CalIcon size={18} /> Calendar
-             </div>
-             <ArrowRight size={16} className="text-neutral-600" />
-          </div>
-          <div className="bg-onyx-900 rounded-xl border border-onyx-800">
-             <CalendarSection 
-               events={appState.events} 
-               tasks={appState.tasks} 
-               onAddEvent={addEvent} 
-               onAddTask={addTask}
-               onUpdateEvent={updateEvent}
-               onDeleteEvent={deleteEvent}
-               onUpdateTask={updateTask}
-               onDeleteTask={deleteTask}
-             />
-          </div>
-        </section>
-
-        <section>
-           <div className="flex items-center justify-between mb-4 cursor-pointer hover:text-white transition-colors" onClick={() => setActiveTab('rituals')}>
-             <div className="flex items-center gap-2 text-neutral-300 font-medium">
-                <CheckSquare size={18} /> Daily Rituals
-             </div>
-             <span className="text-neutral-500 text-xs">{Math.round(dailyProgress)}% Complete</span>
-          </div>
-          <ProgressBar progress={dailyProgress} className="mb-4 h-2" />
-        </section>
-
+        {/* Life Areas Widget */}
         <section>
            <div className="flex items-center justify-between mb-4 cursor-pointer hover:text-white transition-colors" onClick={() => setActiveTab('areas')}>
              <div className="flex items-center gap-2 text-neutral-300 font-medium">
@@ -518,6 +420,30 @@ const App: React.FC = () => {
              ))}
           </div>
         </section>
+
+        {/* Notes Widget (REPLACES CALENDAR) */}
+        <section>
+          <div className="flex items-center justify-between mb-4 cursor-pointer hover:text-white transition-colors" onClick={() => setActiveTab('notes')}>
+             <div className="flex items-center gap-2 text-neutral-300 font-medium">
+                <Notebook size={18} /> Recent Notes & Ideas
+             </div>
+             <ArrowRight size={16} className="text-neutral-600" />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+             {recentNotes.map(note => (
+               <div key={note.id} className="p-5 rounded-xl bg-onyx-900 border border-onyx-800 hover:border-onyx-700 transition-all cursor-pointer group" onClick={() => setActiveTab('notes')}>
+                  <h4 className="text-white font-semibold text-sm mb-2 group-hover:text-blue-400 transition-colors truncate">{note.title}</h4>
+                  <p className="text-neutral-500 text-xs line-clamp-3 mb-4 leading-relaxed">{note.content || "Empty note content..."}</p>
+                  <div className="text-[10px] text-neutral-700">{new Date(note.createdAt).toLocaleDateString()}</div>
+               </div>
+             ))}
+             {recentNotes.length === 0 && (
+                <div className="md:col-span-3 p-10 text-center border border-dashed border-onyx-800 rounded-xl text-neutral-600 text-sm">
+                   No notes yet. Capture your next big idea.
+                </div>
+             )}
+          </div>
+        </section>
       </div>
     );
   };
@@ -525,10 +451,8 @@ const App: React.FC = () => {
   const renderContent = () => {
     switch(activeTab) {
       case 'dashboard': return <DashboardHome />;
-      case 'taskforce': return <TaskForce tasks={appState.tasks.filter(t => t.type === 'short_term' && !t.tags?.includes('calendar_only'))} onToggle={toggleTask} onAdd={addTask} onDelete={deleteTask} onToggleSubtask={toggleSubtask} onUpdate={updateTask} />;
+      case 'taskforce': return <TaskForce tasks={appState.tasks.filter(t => t.type === 'short_term')} onToggle={toggleTask} onAdd={addTask} onDelete={deleteTask} onToggleSubtask={toggleSubtask} onUpdate={updateTask} />;
       case 'operations': return <OperationsBoard tasks={appState.tasks.filter(t => t.type === 'long_term')} onToggle={toggleTask} onAdd={addTask} onToggleSubtask={toggleSubtask} onDelete={deleteTask} onUpdate={updateTask} />;
-      case 'calendar': return <div className="h-full max-w-4xl mx-auto"><CalendarSection events={appState.events} tasks={appState.tasks} onAddEvent={addEvent} onAddTask={addTask} onUpdateEvent={updateEvent} onDeleteEvent={deleteEvent} onUpdateTask={updateTask} onDeleteTask={deleteTask} /></div>;
-      // Reminders Route Removed
       case 'rituals': return <div className="h-full max-w-2xl mx-auto py-4"><DailyChecklist tasks={appState.tasks.filter(t => t.type === 'daily')} onToggle={toggleTask} onAdd={(title) => addTask({ title, type: 'daily' })} onDelete={deleteTask} /></div>;
       case 'areas': return <LifeAreas areas={appState.areas} tasks={appState.tasks} objectives={appState.objectives || []} milestones={appState.milestones || []} onAddTask={addTask} onToggleTask={toggleTask} onDeleteTask={deleteTask} onAddObjective={addObjective} onDeleteObjective={deleteObjective} onAddMilestone={addMilestone} onToggleMilestone={toggleMilestone} onDeleteMilestone={deleteMilestone} onAddArea={addArea} onUpdateArea={updateArea} onDeleteArea={deleteArea} />;
       case 'notes': return <Notes notes={appState.notes || []} onAdd={addNote} onDelete={deleteNote} onUpdate={updateNote} />;
@@ -547,10 +471,9 @@ const App: React.FC = () => {
     </button>
   );
 
-  const taskForceCount = appState.tasks.filter(t => t.type === 'short_term' && !t.completed && !t.tags?.includes('calendar_only')).length;
+  const taskForceCount = appState.tasks.filter(t => t.type === 'short_term' && !t.completed).length;
   const operationsCount = appState.tasks.filter(t => t.type === 'long_term' && !t.completed).length;
 
-  // --- Auth Check ---
   if (authLoading) {
     return (
       <div className="min-h-screen bg-onyx-950 flex items-center justify-center">
@@ -576,8 +499,6 @@ const App: React.FC = () => {
           <div className="my-4 border-t border-onyx-800 mx-4"></div>
           <NavItem id="taskforce" icon={Activity} label="Task Force" badgeCount={taskForceCount} />
           <NavItem id="operations" icon={Target} label="Operations" badgeCount={operationsCount} />
-          <NavItem id="calendar" icon={CalIcon} label="Calendar" />
-          {/* Reminders Nav Item Removed */}
           <NavItem id="rituals" icon={CheckSquare} label="Daily Rituals" />
           <NavItem id="areas" icon={Layers} label="Life Areas" />
           <NavItem id="notes" icon={Notebook} label="Notes" />
@@ -606,8 +527,6 @@ const App: React.FC = () => {
             <div className="border-t border-onyx-800 my-2"></div>
             <NavItem id="taskforce" icon={Activity} label="Task Force" badgeCount={taskForceCount} />
             <NavItem id="operations" icon={Target} label="Operations" badgeCount={operationsCount} />
-            <NavItem id="calendar" icon={CalIcon} label="Calendar" />
-            {/* Reminders Mobile Nav Item Removed */}
             <NavItem id="rituals" icon={CheckSquare} label="Daily Rituals" />
             <NavItem id="areas" icon={Layers} label="Life Areas" />
             <NavItem id="notes" icon={Notebook} label="Notes" />

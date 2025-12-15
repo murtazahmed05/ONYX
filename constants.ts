@@ -1,4 +1,5 @@
-import { LifeArea, Task, CalendarEvent, Milestone, Objective, Note } from './types';
+
+import { LifeArea, Task, Milestone, Objective, Note } from './types';
 import { 
   Briefcase, 
   Heart, 
@@ -40,8 +41,6 @@ export const INITIAL_TASKS: Task[] = [];
 export const INITIAL_OBJECTIVES: Objective[] = [];
 
 export const INITIAL_MILESTONES: Milestone[] = [];
-
-export const INITIAL_EVENTS: CalendarEvent[] = [];
 
 export const INITIAL_NOTES: Note[] = [];
 

@@ -29,12 +29,8 @@ import {
   Plus
 } from 'lucide-react';
 
-export const INITIAL_AREAS: LifeArea[] = [
-  { id: 'area-1', name: 'Career', icon: 'Briefcase', color: '#3b82f6' },
-  { id: 'area-2', name: 'Health', icon: 'Dumbbell', color: '#10b981' },
-  { id: 'area-3', name: 'Learning', icon: 'BookOpen', color: '#f59e0b' },
-  { id: 'area-4', name: 'Relationships', icon: 'Heart', color: '#ec4899' },
-];
+// START EMPTY as requested
+export const INITIAL_AREAS: LifeArea[] = [];
 
 export const INITIAL_TASKS: Task[] = [];
 

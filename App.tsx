@@ -120,6 +120,21 @@ const App: React.FC = () => {
     }
   }, [appState, user, authLoading, dataLoading]);
 
+  // Robust Save on Close/Reload
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      // Synchronously save to localStorage to guarantee persistence
+      // Firestore save might happen if connection allows, but localStorage is priority here
+      try {
+        localStorage.setItem('ONYX_APP_DATA_V1', JSON.stringify(appState));
+      } catch (e) {
+        console.error("Backup save failed", e);
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [appState]);
+
   useEffect(() => {
     localStorage.setItem('ONYX_ACTIVE_TAB', activeTab);
   }, [activeTab]);
@@ -319,10 +334,7 @@ const App: React.FC = () => {
     const highPriority = appState.tasks.filter(t => t.type === 'short_term' && !t.completed && t.priority === 'High');
     const taskForceTasks = appState.tasks.filter(t => t.type === 'short_term' && !t.completed);
     const operations = appState.tasks.filter(t => t.type === 'long_term' && !t.completed);
-    
-    const dailyTasks = appState.tasks.filter(t => t.type === 'daily');
-    const completedDaily = dailyTasks.filter(t => t.completed).length;
-    const dailyProgress = dailyTasks.length > 0 ? (completedDaily / dailyTasks.length) * 100 : 0;
+    const isEmpty = appState.tasks.length === 0 && appState.areas.length === 0 && appState.notes.length === 0;
     
     const areaStats = appState.areas.map(area => {
         const areaTasks = appState.tasks.filter(t => t.areaId === area.id);
@@ -351,6 +363,24 @@ const App: React.FC = () => {
            </div>
         </div>
 
+        {isEmpty && (
+            <section className="bg-onyx-900 border border-onyx-800 rounded-xl p-8 text-center animate-in fade-in slide-in-from-top-4">
+                <div className="w-16 h-16 bg-onyx-800 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Target size={32} className="text-white" />
+                </div>
+                <h3 className="text-xl font-bold text-white mb-2">Welcome to Onyx.</h3>
+                <p className="text-neutral-400 max-w-md mx-auto mb-6">Your system is clean and ready. Start by defining your Life Areas or adding immediate tasks.</p>
+                <div className="flex gap-4 justify-center">
+                    <button onClick={() => setActiveTab('areas')} className="bg-white text-black px-6 py-2 rounded-lg font-medium hover:bg-neutral-200 transition-colors">
+                        Create Life Areas
+                    </button>
+                    <button onClick={() => setActiveTab('taskforce')} className="bg-onyx-800 text-white border border-onyx-700 px-6 py-2 rounded-lg font-medium hover:bg-onyx-700 transition-colors">
+                        Add Tasks
+                    </button>
+                </div>
+            </section>
+        )}
+
         {/* Task Force Widget */}
         <section>
           <div className="flex items-center justify-between mb-4 cursor-pointer hover:text-white transition-colors" onClick={() => setActiveTab('taskforce')}>
@@ -376,7 +406,7 @@ const App: React.FC = () => {
                   </div>
                </div>
              ))}
-             {taskForceTasks.length === 0 && (
+             {taskForceTasks.length === 0 && !isEmpty && (
                 <div className="p-6 text-center border border-dashed border-onyx-800 rounded-xl text-neutral-600 text-sm">
                    Task force standing by.
                 </div>
@@ -405,7 +435,7 @@ const App: React.FC = () => {
                ))}
              </div>
           ) : (
-             <div className="text-neutral-600 text-sm italic">No active operations.</div>
+             !isEmpty && <div className="text-neutral-600 text-sm italic">No active operations.</div>
           )}
         </section>
 
@@ -417,15 +447,19 @@ const App: React.FC = () => {
              </div>
              <ArrowRight size={16} className="text-neutral-600" />
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-             {areaStats.map(area => (
-                <div key={area.id} className="bg-onyx-900 border border-onyx-800 p-4 rounded-lg text-center opacity-80 hover:opacity-100 transition-opacity">
-                   <div className="w-2 h-2 rounded-full mx-auto mb-2" style={{ backgroundColor: area.color }}></div>
-                   <span className="text-sm font-bold text-neutral-200 block mb-1">{area.name}</span>
-                   <span className="text-xs font-medium text-neutral-400">{area.percentage}%</span>
-                </div>
-             ))}
-          </div>
+          {areaStats.length > 0 ? (
+             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {areaStats.map(area => (
+                    <div key={area.id} className="bg-onyx-900 border border-onyx-800 p-4 rounded-lg text-center opacity-80 hover:opacity-100 transition-opacity">
+                    <div className="w-2 h-2 rounded-full mx-auto mb-2" style={{ backgroundColor: area.color }}></div>
+                    <span className="text-sm font-bold text-neutral-200 block mb-1">{area.name}</span>
+                    <span className="text-xs font-medium text-neutral-400">{area.percentage}%</span>
+                    </div>
+                ))}
+             </div>
+          ) : (
+             !isEmpty && <div className="text-neutral-600 text-sm italic">No areas defined.</div>
+          )}
         </section>
 
         {/* Notes Widget (REPLACES CALENDAR) */}

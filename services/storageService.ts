@@ -1,3 +1,4 @@
+
 import { AppState } from '../types';
 import { db } from './firebase';
 import { doc, setDoc, onSnapshot } from 'firebase/firestore';
@@ -52,13 +53,20 @@ export const subscribeToData = (userId: string, onUpdate: (data: AppState | null
 };
 
 export const checkDailyReset = (state: AppState): AppState => {
+  if (!state) return state;
+  
   const today = new Date().toISOString().split('T')[0];
+  
+  // Ensure arrays exist to prevent crashes on corrupted state
+  const tasks = state.tasks || [];
+  
   if (state.lastLoginDate !== today) {
     // Reset daily tasks
-    const updatedTasks = state.tasks.map(t => 
+    const updatedTasks = tasks.map(t => 
       t.type === 'daily' ? { ...t, completed: false } : t
     );
     return { ...state, tasks: updatedTasks, lastLoginDate: today };
   }
-  return state;
+  
+  return { ...state, tasks };
 };

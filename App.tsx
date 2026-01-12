@@ -58,13 +58,18 @@ const App: React.FC = () => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const lastCheckedMinuteRef = useRef<string>('');
 
-  const [appState, setAppState] = useState<AppState>({
-    tasks: INITIAL_TASKS,
-    areas: INITIAL_AREAS,
-    milestones: INITIAL_MILESTONES,
-    objectives: INITIAL_OBJECTIVES,
-    notes: INITIAL_NOTES,
-    lastLoginDate: new Date().toISOString().split('T')[0]
+  // Initialize state lazily to prevent race conditions that overwrite local storage
+  const [appState, setAppState] = useState<AppState>(() => {
+    const local = loadState();
+    const defaultState = {
+      tasks: INITIAL_TASKS,
+      areas: INITIAL_AREAS,
+      milestones: INITIAL_MILESTONES,
+      objectives: INITIAL_OBJECTIVES,
+      notes: INITIAL_NOTES,
+      lastLoginDate: new Date().toISOString().split('T')[0]
+    };
+    return local ? checkDailyReset(local) : defaultState;
   });
 
   // --- Auth & Data Sync Effects ---
@@ -80,12 +85,14 @@ const App: React.FC = () => {
           if (cloudData) {
             isRemoteUpdate.current = true;
             setAppState(prev => checkDailyReset(cloudData));
-          }
+          } 
+          // If cloudData is null (new user), we stick with the current local state 
+          // (which will be saved to cloud by the next saveState effect)
           setDataLoading(false);
         });
         return () => unsubscribeData();
       } else {
-        // User Logged Out: Load Local or Reset
+        // User Logged Out: Ensure we rely on local state or reload it to be safe
         const localData = loadState();
         if (localData) {
           setAppState(checkDailyReset(localData));
